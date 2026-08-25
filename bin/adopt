@@ -1,0 +1,123 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Bring a feature under management: git-add it, regenerate the index, stage both.
+#
+# Two ways in, decided by whether the argument names an existing path:
+#
+#   bin/adopt <slug>          a folder already sitting in features/<lifecycle>/,
+#                             adopted wherever it was dumped — the path is the
+#                             state, so no lifecycle is asked for
+#   bin/adopt <path> [slug]   a folder or file from anywhere else, moved into
+#                             features/proposed/<slug>/ first
+
+# This repo pins its Ruby in .ruby-version; the library uses 3.x syntax, so
+# fail with a sentence rather than a parse dump when an older Ruby is in PATH.
+if RUBY_VERSION < "3.0"
+  abort "bin/adopt: needs Ruby 3.0+, found #{RUBY_VERSION}. " \
+        "Run it from the repo root so .ruby-version applies."
+end
+
+require_relative "lib/planning"
+require "fileutils"
+
+USAGE = <<~TEXT
+  usage: bin/adopt <slug> [--commit]
+         bin/adopt <path> [slug] [--commit]
+
+    <slug>   a folder already under features/<lifecycle>/, adopted in place
+    <path>   a folder or file from anywhere, moved into features/proposed/<slug>/
+             (slug defaults to the path's own name)
+    --commit create the commit as well as staging it
+TEXT
+
+do_commit = false
+positional = []
+
+ARGV.each do |arg|
+  case arg
+  when "--commit" then do_commit = true
+  when "--help", "-h" then puts USAGE; exit 0
+  when /\A-/ then abort "bin/adopt: unknown flag #{arg.inspect}\n\n#{USAGE}"
+  else positional << arg
+  end
+end
+
+abort USAGE if positional.empty? || positional.length > 2
+
+def git(*args, capture: false)
+  if capture
+    out = IO.popen(["git", "-C", Planning::ROOT, *args], err: File::NULL, &:read)
+    [out, $?.success?]
+  else
+    system("git", "-C", Planning::ROOT, *args) || abort("bin/adopt: git #{args.join(" ")} failed")
+  end
+end
+
+_, in_repo = git("rev-parse", "--git-dir", capture: true)
+abort "bin/adopt: #{Planning::ROOT} is not a git repository" unless in_repo
+
+source, given_slug = positional
+
+# A path that exists means import; anything else is read as a slug already in
+# the tree. Which branch ran is always printed, so the guess is never silent.
+if File.exist?(source)
+  slug = (given_slug || File.basename(source, ".*")).strip
+  abort "bin/adopt: #{slug.inspect} is not usable as a folder name" if slug.empty? || slug.include?("/")
+
+  rel_dir = File.join("features", "proposed", slug)
+  destination = File.join(Planning::ROOT, rel_dir)
+  abort "bin/adopt: #{rel_dir}/ already exists" if File.exist?(destination)
+
+  puts "importing #{source} → #{rel_dir}/"
+
+  tracked, = git("ls-files", "--", source, capture: true)
+  if File.directory?(source)
+    if tracked.to_s.strip.empty?
+      FileUtils.mkdir_p(File.dirname(destination))
+      FileUtils.mv(source, destination)
+    else
+      git("mv", source, rel_dir)
+    end
+  else
+    FileUtils.mkdir_p(destination)
+    moved = File.join(rel_dir, File.basename(source))
+    tracked.to_s.strip.empty? ? FileUtils.mv(source, File.join(destination, File.basename(source))) : git("mv", source, moved)
+  end
+else
+  abort "bin/adopt: #{source.inspect} is neither a path nor a slug under features/*/" if source.include?("/")
+
+  matches = Planning::Feature.find(source)
+  case matches.length
+  when 0
+    abort "bin/adopt: no path or feature folder named #{source.inspect}"
+  when 1
+    # the ordinary case
+  else
+    abort "bin/adopt: #{source.inspect} exists in more than one lifecycle: " \
+          "#{matches.map(&:rel_dir).join(", ")}. Resolve by hand."
+  end
+
+  slug = source
+  rel_dir = matches.first.rel_dir
+  puts "adopting #{rel_dir}/ where it sits"
+end
+
+already, = git("ls-files", "--", rel_dir, capture: true)
+puts "note: already tracked; this only refreshes the index" unless already.to_s.strip.empty?
+
+git("add", "--", rel_dir)
+
+File.write(Planning::Index.readme_path, Planning::Index.render)
+puts "regenerated README.md"
+git("add", "--", "README.md")
+
+subject = "Adopt #{slug}"
+if do_commit
+  git("commit", "-m", subject)
+  puts "committed: #{subject}"
+else
+  puts
+  puts "Staged as one commit's worth of changes. To finish:"
+  puts "  git commit -m #{subject.inspect}"
+end

@@ -1,0 +1,129 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Delete a feature folder, regenerate the index, and stage both as one commit's
+# worth of change.
+#
+# A folder whose content is already committed can be recovered from history, so
+# it is removed without ceremony. Content in no commit cannot be recovered, so
+# that case refuses until you pass --force.
+
+# This repo pins its Ruby in .ruby-version; the library uses 3.x syntax, so
+# fail with a sentence rather than a parse dump when an older Ruby is in PATH.
+if RUBY_VERSION < "3.0"
+  abort "bin/delete: needs Ruby 3.0+, found #{RUBY_VERSION}. " \
+        "Run it from the repo root so .ruby-version applies."
+end
+
+require_relative "lib/planning"
+require "fileutils"
+
+USAGE = <<~TEXT
+  usage: bin/delete <slug> [--dry-run] [--force] [--commit]
+
+    --dry-run  report what would be removed; touch nothing
+    --force    delete even when the folder holds uncommitted work
+    --commit   create the commit as well as staging it
+TEXT
+
+dry_run = false
+force = false
+do_commit = false
+positional = []
+
+ARGV.each do |arg|
+  case arg
+  when "--dry-run", "-n" then dry_run = true
+  when "--force" then force = true
+  when "--commit" then do_commit = true
+  when "--help", "-h" then puts USAGE; exit 0
+  when /\A-/ then abort "bin/delete: unknown flag #{arg.inspect}\n\n#{USAGE}"
+  else positional << arg
+  end
+end
+
+abort USAGE unless positional.length == 1
+slug = positional.first
+
+def git(*args, capture: false)
+  if capture
+    out = IO.popen(["git", "-C", Planning::ROOT, *args], err: File::NULL, &:read)
+    [out, $?.success?]
+  else
+    system("git", "-C", Planning::ROOT, *args) || abort("bin/delete: git #{args.join(" ")} failed")
+  end
+end
+
+_, in_repo = git("rev-parse", "--git-dir", capture: true)
+abort "bin/delete: #{Planning::ROOT} is not a git repository" unless in_repo
+
+matches = Planning::Feature.find(slug)
+case matches.length
+when 0
+  abort "bin/delete: no feature folder named #{slug.inspect} under features/*/"
+when 1
+  # the ordinary case
+else
+  abort "bin/delete: #{slug.inspect} exists in more than one lifecycle: " \
+        "#{matches.map(&:rel_dir).join(", ")}. Resolve by hand."
+end
+
+feature = matches.first
+files = Dir.glob(File.join(feature.dir, "**", "*"), File::FNM_DOTMATCH).select { |p| File.file?(p) }
+puts "#{feature.rel_dir}/ — #{files.length} file#{"s" unless files.length == 1}"
+
+# Content already in the last commit survives this; anything else is gone for
+# good. The comparison is by blob hash rather than by path, so a folder that
+# has only been moved still counts as committed — git has it under its old
+# name, which is all recovery needs.
+listing, has_head = git("ls-tree", "-r", "HEAD", capture: true)
+committed = has_head ? listing.to_s.lines.filter_map { |line| line.split(/\s+/)[2] } : []
+
+unrecoverable = files.reject { |file|
+  hash, hashed = git("hash-object", "--", file, capture: true)
+  hashed && committed.include?(hash.to_s.strip)
+}.map { |file| file.delete_prefix("#{Planning::ROOT}/") }
+
+if unrecoverable.any? && !force
+  puts
+  puts "REFUSING TO DELETE — these files hold content that is not in any commit:"
+  unrecoverable.each { |file| puts "  #{file}" }
+  puts
+  puts "Commit them first if you might want them back, or re-run with --force."
+  exit 1
+end
+
+if dry_run
+  puts "--dry-run: nothing deleted."
+  exit 0
+end
+
+if unrecoverable.any?
+  puts "!" * 72
+  puts "!! --force: removing content that is in no commit and cannot be recovered."
+  unrecoverable.each { |file| puts "!!   #{file}" }
+  puts "!" * 72
+end
+
+tracked, = git("ls-files", "--", feature.rel_dir, capture: true)
+unless tracked.to_s.strip.empty?
+  # -f unconditionally: git's own refusal duplicates the check above, which has
+  # already established that every file here is either recoverable or forced.
+  git("rm", "-r", "-f", "--quiet", "--", feature.rel_dir)
+end
+FileUtils.rm_rf(feature.dir) if File.exist?(feature.dir)
+puts "removed #{feature.rel_dir}/"
+
+File.write(Planning::Index.readme_path, Planning::Index.render)
+puts "regenerated README.md"
+git("add", "--", "README.md")
+
+subject = "Delete #{slug}"
+if do_commit
+  git("commit", "-m", subject)
+  puts "committed: #{subject}"
+else
+  puts
+  puts "Staged as one commit's worth of changes. To finish:"
+  puts "  git commit -m #{subject.inspect}"
+end

@@ -1,0 +1,24 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Verify README.md's generated index still matches the feature tree. That is the
+# only thing this repo asserts — nothing inside a feature folder is validated.
+
+# This repo pins its Ruby in .ruby-version; the library uses 3.x syntax, so
+# fail with a sentence rather than a parse dump when an older Ruby is in PATH.
+if RUBY_VERSION < "3.0"
+  abort "bin/check: needs Ruby 3.0+, found #{RUBY_VERSION}. " \
+        "Run it from the repo root so .ruby-version applies."
+end
+
+if ARGV.include?("--help") || ARGV.include?("-h")
+  puts <<~TEXT
+    usage: bin/check
+
+    Exits 0 when README.md's generated index matches the feature tree, 1 when it
+    is stale. Run it before committing.
+  TEXT
+  exit 0
+end
+
+exec(File.join(__dir__, "index"), "--check")

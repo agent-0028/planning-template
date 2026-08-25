@@ -1,0 +1,114 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Move a feature folder from one lifecycle to another, regenerate the index, and
+# stage both as one commit's worth of change. Nothing inside the folder is read,
+# validated, or edited — the path is the only thing that carries state.
+#
+# Strictly a git mv. A folder git does not track yet belongs to bin/adopt.
+
+# This repo pins its Ruby in .ruby-version; the library uses 3.x syntax, so
+# fail with a sentence rather than a parse dump when an older Ruby is in PATH.
+if RUBY_VERSION < "3.0"
+  abort "bin/move: needs Ruby 3.0+, found #{RUBY_VERSION}. " \
+        "Run it from the repo root so .ruby-version applies."
+end
+
+require_relative "lib/planning"
+
+USAGE = <<~TEXT
+  usage: bin/move <slug> <lifecycle> [--dry-run] [--commit]
+
+    <lifecycle>  one of #{Planning::LIFECYCLES.sort.join(", ")}
+    --dry-run    report the move; touch nothing
+    --commit     create the commit as well as staging it
+TEXT
+
+dry_run = false
+do_commit = false
+positional = []
+
+ARGV.each do |arg|
+  case arg
+  when "--dry-run", "-n" then dry_run = true
+  when "--commit" then do_commit = true
+  when "--help", "-h" then puts USAGE; exit 0
+  when /\A-/ then abort "bin/move: unknown flag #{arg.inspect}\n\n#{USAGE}"
+  else positional << arg
+  end
+end
+
+abort USAGE unless positional.length == 2
+slug, target = positional
+
+unless Planning::LIFECYCLES.include?(target)
+  abort "bin/move: #{target.inspect} is not a lifecycle (#{Planning::LIFECYCLES.sort.join(", ")})"
+end
+
+def git(*args, capture: false)
+  if capture
+    out = IO.popen(["git", "-C", Planning::ROOT, *args], err: File::NULL, &:read)
+    [out, $?.success?]
+  else
+    system("git", "-C", Planning::ROOT, *args) || abort("bin/move: git #{args.join(" ")} failed")
+  end
+end
+
+_, in_repo = git("rev-parse", "--git-dir", capture: true)
+abort "bin/move: #{Planning::ROOT} is not a git repository" unless in_repo
+
+matches = Planning::Feature.find(slug)
+case matches.length
+when 0
+  abort "bin/move: no feature folder named #{slug.inspect} under features/*/"
+when 1
+  # the ordinary case
+else
+  abort "bin/move: #{slug.inspect} exists in more than one lifecycle: " \
+        "#{matches.map(&:rel_dir).join(", ")}. Resolve by hand."
+end
+
+feature = matches.first
+abort "bin/move: #{slug} is already in features/#{target}/" if feature.lifecycle == target
+
+destination = File.join("features", target, slug)
+if File.exist?(File.join(Planning::ROOT, destination))
+  abort "bin/move: #{destination}/ already exists"
+end
+
+puts "#{feature.rel_dir}/ → #{destination}/"
+
+if dry_run
+  puts "--dry-run: nothing moved."
+  exit 0
+end
+
+staged, = git("diff", "--cached", "--name-only", capture: true)
+unless staged.to_s.strip.empty?
+  puts
+  puts "note: the index already has staged changes; they will land in the same commit:"
+  staged.lines.each { |line| puts "  #{line.strip}" }
+end
+
+tracked, = git("ls-files", "--", feature.rel_dir, capture: true)
+if tracked.to_s.strip.empty?
+  abort "bin/move: #{feature.rel_dir}/ has no tracked files yet. " \
+        "Run bin/adopt #{slug} to bring it under version control first."
+end
+
+git("mv", feature.rel_dir, destination)
+
+File.write(Planning::Index.readme_path, Planning::Index.render)
+puts "regenerated README.md"
+
+git("add", "--", "features", "README.md")
+
+subject = "Move #{slug} to #{target}"
+if do_commit
+  git("commit", "-m", subject)
+  puts "committed: #{subject}"
+else
+  puts
+  puts "Staged as one commit's worth of changes. To finish:"
+  puts "  git commit -m #{subject.inspect}"
+end
