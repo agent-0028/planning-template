@@ -1,0 +1,30 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Run the test suite. Minitest ships with Ruby, so there is nothing to install
+# and no Gemfile to keep in step — same stdlib-only rule the lib follows.
+#
+# Tests cover bin/lib/planning.rb. The scripts in this directory resolve
+# Planning::ROOT from __dir__ at load time, which makes them awkward to point at
+# a fixture; they are covered by the manual walkthrough in README.md instead.
+
+if RUBY_VERSION < "3.0"
+  abort "bin/test: needs Ruby 3.0+, found #{RUBY_VERSION}. " \
+        "Run it from the repo root so .ruby-version applies."
+end
+
+if ARGV.include?("--help") || ARGV.include?("-h")
+  puts <<~TEXT
+    usage: bin/test
+
+    Runs every test/*_test.rb. Any other arguments are passed through to
+    Minitest, so `bin/test -n /title/` filters by name.
+  TEXT
+  exit 0
+end
+
+root = File.expand_path("..", __dir__)
+files = Dir.glob(File.join(root, "test", "*_test.rb")).sort
+abort "bin/test: no test files found under test/" if files.empty?
+
+files.each { |file| require file }
