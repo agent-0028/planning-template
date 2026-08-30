@@ -98,6 +98,13 @@ module Planning
       under the lifecycle whose directory it sits in.
     MARKDOWN
 
+    # A row as bin/index writes it: | [Title](features/<lifecycle>/<slug>/) | date |
+    ROW_RE = %r{^\|\s*\[(?<title>.+)\]\((?<path>features/[^)]+?)/?\)\s*\|}
+
+    # What render produced, and where each title came from. bin/index reports the
+    # provenance; every other caller only wants the text.
+    Result = Struct.new(:text, :kept, :derived)
+
     module_function
 
     def index_path(root = ROOT) = File.join(root, "INDEX.md")
@@ -110,24 +117,60 @@ module Planning
       File.exist?(path) ? File.read(path, encoding: "UTF-8") : ""
     end
 
-    def render(root = ROOT)
-      features = Feature.all(root)
-      tables = LIFECYCLES.map { |lifecycle|
-        table(lifecycle, features.select { |feature| feature.lifecycle == lifecycle })
-      }.join
-      "#{PREAMBLE}\n#{tables}".rstrip + "\n"
+    # Titles already present in INDEX.md, keyed by rel_dir *and* by slug. The
+    # rel_dir key is exact, which keeps two folders sharing a slug apart. The
+    # slug key is what carries a corrected title through a bin/move, where the
+    # row's path changes but the folder is plainly the same one.
+    #
+    # Anything that does not parse is simply not found, so a mangled table costs
+    # you the hand-edits it mangled and nothing else.
+    def parse(text)
+      text.to_s.lines.each_with_object({}) do |line, found|
+        match = ROW_RE.match(line)
+        next unless match
+
+        title = match[:title].gsub("\\|", "|").strip
+        next if title.empty?
+
+        found[match[:path]] = title
+        found[File.basename(match[:path])] ||= title
+      end
     end
 
-    def table(lifecycle, features)
+    # The index is regenerated from the tree, but the title column is free text:
+    # a title already in the file wins over the one scraped from the folder, so
+    # correcting a bad heading by hand sticks.
+    def render(root = ROOT)
+      features = Feature.all(root)
+      known = parse(current(root))
+      kept = []
+      derived = []
+
+      titles = features.to_h { |feature|
+        existing = known[feature.rel_dir] || known[feature.slug]
+        (existing ? kept : derived) << feature.slug
+        [feature.rel_dir, existing || feature.title]
+      }
+
+      tables = LIFECYCLES.map { |lifecycle|
+        table(lifecycle, features.select { |feature| feature.lifecycle == lifecycle }, titles)
+      }.join
+
+      Result.new("#{PREAMBLE}\n#{tables}".rstrip + "\n", kept, derived)
+    end
+
+    def table(lifecycle, features, titles = {})
       out = +"## #{lifecycle.capitalize}\n\n"
       return out << "_None._\n\n" if features.empty?
 
       out << "| Feature | Updated |\n| --- | --- |\n"
       features
-        .sort_by { |feature| [-feature.updated.jd, feature.title.downcase] }
-        .each { |feature| out << "| [#{escape(feature.title)}](#{feature.rel_dir}/) | #{feature.updated} |\n" }
+        .sort_by { |feature| [-feature.updated.jd, title_for(feature, titles).downcase] }
+        .each { |feature| out << "| [#{escape(title_for(feature, titles))}](#{feature.rel_dir}/) | #{feature.updated} |\n" }
       out << "\n"
     end
+
+    def title_for(feature, titles) = titles.fetch(feature.rel_dir, feature.title)
 
     def escape(text) = text.to_s.gsub("|", "\\|").gsub(/\s+/, " ").strip
   end

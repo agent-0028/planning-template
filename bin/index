@@ -41,7 +41,7 @@ path = Planning::Index.index_path
 exists = File.exist?(path)
 current = Planning::Index.current
 
-if exists && current == updated
+if exists && current == updated.text
   puts "bin/index: INDEX.md is up to date."
   exit 0
 end
@@ -55,7 +55,7 @@ if mode == :check
   end
 
   have = current.lines
-  want = updated.lines
+  want = updated.text.lines
   at = (0...[have.length, want.length].max).find { |i| have[i] != want[i] }
   warn "bin/index: INDEX.md is out of date (first difference at line #{at.to_i + 1}); run bin/index"
   warn "  have: #{have[at].to_s.chomp.inspect}"
@@ -63,5 +63,14 @@ if mode == :check
   exit 1
 end
 
-File.write(path, updated)
+File.write(path, updated.text)
 puts "bin/index: #{exists ? "rewrote" : "created"} INDEX.md."
+
+# Preserving a hand-edited title is invisible in the diff when it works, and
+# indistinguishable from losing it when it does not. So say which happened.
+unless updated.kept.empty?
+  puts "  kept #{updated.kept.length} title#{"s" unless updated.kept.length == 1} already in the index"
+end
+unless updated.derived.empty?
+  puts "  derived #{updated.derived.length} from the folder: #{updated.derived.join(", ")}"
+end

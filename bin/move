@@ -98,7 +98,7 @@ end
 
 git("mv", feature.rel_dir, destination)
 
-File.write(Planning::Index.index_path, Planning::Index.render)
+File.write(Planning::Index.index_path, Planning::Index.render.text)
 puts "regenerated INDEX.md"
 
 git("add", "--", "features", "INDEX.md")

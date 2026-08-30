@@ -108,7 +108,7 @@ puts "note: already tracked; this only refreshes the index" unless already.to_s.
 
 git("add", "--", rel_dir)
 
-File.write(Planning::Index.index_path, Planning::Index.render)
+File.write(Planning::Index.index_path, Planning::Index.render.text)
 puts "regenerated INDEX.md"
 git("add", "--", "INDEX.md")
 
