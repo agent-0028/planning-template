@@ -98,10 +98,10 @@ end
 
 git("mv", feature.rel_dir, destination)
 
-File.write(Planning::Index.readme_path, Planning::Index.render)
-puts "regenerated README.md"
+File.write(Planning::Index.index_path, Planning::Index.render)
+puts "regenerated INDEX.md"
 
-git("add", "--", "features", "README.md")
+git("add", "--", "features", "INDEX.md")
 
 subject = "Move #{slug} to #{target}"
 if do_commit

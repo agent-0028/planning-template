@@ -7,7 +7,8 @@
 ```
 features/<lifecycle>/<slug>/   # one folder per feature
 adr/                           # cross-cutting decisions
-README.md                      # GENERATED — do not hand-edit
+INDEX.md                       # GENERATED — do not hand-edit
+README.md                      # hand-written
 ```
 
 Lifecycle is one of `proposed`, `active`, `shipped`, `abandoned`. **The path is the state.** Nothing inside a folder records it.
@@ -22,7 +23,7 @@ What goes inside is up to whoever writes it. File names and sections are convent
 
 - Default to `features/active/` only.
 - Read `features/proposed/` when drafting or reviewing a not-yet-approved feature.
-- Do NOT read `features/shipped/` or `features/abandoned/` unless the task names a specific feature there, or asks about prior art. `README.md` lists every feature in one line each — use it before opening an archived folder.
+- Do NOT read `features/shipped/` or `features/abandoned/` unless the task names a specific feature there, or asks about prior art. `INDEX.md` lists every feature in one line each — use it before opening an archived folder.
 
 ## Commands
 
@@ -36,11 +37,14 @@ bin/move <slug> <lifecycle>
 # remove a feature folder
 bin/delete <slug>
 
-# regenerate README.md from the tree
+# regenerate INDEX.md from the tree
 bin/index
 
-# verify README.md matches the tree
+# verify INDEX.md matches the tree
 bin/check
+
+# run the test suite
+bin/test
 ```
 
 Never `git mv` a feature folder by hand — `bin/adopt` and `bin/move` regenerate the index in the same commit, and a stale index is the thing most likely to drift. What each command does: [README.md](README.md#commands).
@@ -58,4 +62,4 @@ Amend a feature in place and re-run whatever tool produced it. Do not fork a `-v
 
 ## Done means
 
-`bin/check` exits zero, and the commit touches exactly one feature folder unless it is a repo-wide convention change.
+`bin/test` and `bin/check` both exit zero, and the commit touches exactly one feature folder unless it is a repo-wide convention change.

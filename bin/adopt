@@ -108,9 +108,9 @@ puts "note: already tracked; this only refreshes the index" unless already.to_s.
 
 git("add", "--", rel_dir)
 
-File.write(Planning::Index.readme_path, Planning::Index.render)
-puts "regenerated README.md"
-git("add", "--", "README.md")
+File.write(Planning::Index.index_path, Planning::Index.render)
+puts "regenerated INDEX.md"
+git("add", "--", "INDEX.md")
 
 subject = "Adopt #{slug}"
 if do_commit

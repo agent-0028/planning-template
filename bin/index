@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Regenerate the GENERATED INDEX block in README.md from the feature tree.
+# Regenerate INDEX.md from the feature tree. The whole file is generated.
 # Lifecycle comes from the path segment. Nothing else is read from the folder.
 
 # This repo pins its Ruby in .ruby-version; the library uses 3.x syntax, so
@@ -17,8 +17,8 @@ if ARGV.include?("--help") || ARGV.include?("-h")
   puts <<~TEXT
     usage: bin/index [--check]
 
-      (no args)  rewrite the GENERATED INDEX block in README.md
-      --check    exit 1 if the block would change; write nothing
+      (no args)  write INDEX.md from the feature tree
+      --check    exit 1 if INDEX.md is missing or would change; write nothing
   TEXT
   exit 0
 end
@@ -37,23 +37,31 @@ rescue => e
   abort "bin/index: #{e.message}"
 end
 
-path = Planning::Index.readme_path
-current = File.read(path, encoding: "UTF-8")
+path = Planning::Index.index_path
+exists = File.exist?(path)
+current = Planning::Index.current
 
-if current == updated
-  puts "bin/index: README.md is up to date."
+if exists && current == updated
+  puts "bin/index: INDEX.md is up to date."
   exit 0
 end
 
 if mode == :check
+  # A repo that has only just adopted this tooling has no INDEX.md at all.
+  # That is a different message from a stale one, and not a stack trace.
+  unless exists
+    warn "bin/index: INDEX.md is missing; run bin/index"
+    exit 1
+  end
+
   have = current.lines
   want = updated.lines
   at = (0...[have.length, want.length].max).find { |i| have[i] != want[i] }
-  warn "bin/index: README.md is out of date (first difference at line #{at.to_i + 1}); run bin/index"
+  warn "bin/index: INDEX.md is out of date (first difference at line #{at.to_i + 1}); run bin/index"
   warn "  have: #{have[at].to_s.chomp.inspect}"
   warn "  want: #{want[at].to_s.chomp.inspect}"
   exit 1
 end
 
 File.write(path, updated)
-puts "bin/index: rewrote the generated index in README.md."
+puts "bin/index: #{exists ? "rewrote" : "created"} INDEX.md."
