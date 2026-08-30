@@ -1,0 +1,899 @@
+diff --git a/AGENTS.md b/AGENTS.md
+index d4c8c8a..49ad4ba 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -7,11 +7,14 @@
+ ```
+ features/<lifecycle>/<slug>/   # one folder per feature
+ adr/                           # cross-cutting decisions
+-README.md                      # GENERATED — do not hand-edit
++INDEX.md                       # GENERATED, except the title column
++README.md                      # hand-written
+ ```
+ 
+ Lifecycle is one of `proposed`, `active`, `shipped`, `abandoned`. **The path is the state.** Nothing inside a folder records it.
+ 
++`INDEX.md` is rebuilt from the tree, but its title column is free text: a title already in the file wins over the one scraped from the folder, so a bad heading can be corrected in place and it sticks — through a `bin/move` as well. Delete a row to derive it from the folder again.
++
+ ## What a feature is
+ 
+ A feature is a kebab-case slug directory under `features/<lifecycle>/`. Slugs are semantic — two to four words, no ticket IDs, no dates.
+@@ -22,7 +25,7 @@ What goes inside is up to whoever writes it. File names and sections are convent
+ 
+ - Default to `features/active/` only.
+ - Read `features/proposed/` when drafting or reviewing a not-yet-approved feature.
+-- Do NOT read `features/shipped/` or `features/abandoned/` unless the task names a specific feature there, or asks about prior art. `README.md` lists every feature in one line each — use it before opening an archived folder.
++- Do NOT read `features/shipped/` or `features/abandoned/` unless the task names a specific feature there, or asks about prior art. `INDEX.md` lists every feature in one line each — use it before opening an archived folder.
+ 
+ ## Commands
+ 
+@@ -36,11 +39,14 @@ bin/move <slug> <lifecycle>
+ # remove a feature folder
+ bin/delete <slug>
+ 
+-# regenerate README.md from the tree
++# regenerate INDEX.md from the tree
+ bin/index
+ 
+-# verify README.md matches the tree
++# verify INDEX.md matches the tree
+ bin/check
++
++# run the test suite
++bin/test
+ ```
+ 
+ Never `git mv` a feature folder by hand — `bin/adopt` and `bin/move` regenerate the index in the same commit, and a stale index is the thing most likely to drift. What each command does: [README.md](README.md#commands).
+@@ -58,4 +64,4 @@ Amend a feature in place and re-run whatever tool produced it. Do not fork a `-v
+ 
+ ## Done means
+ 
+-`bin/check` exits zero, and the commit touches exactly one feature folder unless it is a repo-wide convention change.
++`bin/test` and `bin/check` both exit zero, and the commit touches exactly one feature folder unless it is a repo-wide convention change.
+diff --git a/VERSION b/VERSION
+new file mode 100644
+index 0000000..d00491f
+--- /dev/null
++++ b/VERSION
+@@ -0,0 +1 @@
++1
+diff --git a/bin/adopt b/bin/adopt
+index 8938e46..72e14cf 100755
+--- a/bin/adopt
++++ b/bin/adopt
+@@ -108,9 +108,9 @@ puts "note: already tracked; this only refreshes the index" unless already.to_s.
+ 
+ git("add", "--", rel_dir)
+ 
+-File.write(Planning::Index.readme_path, Planning::Index.render)
+-puts "regenerated README.md"
+-git("add", "--", "README.md")
++File.write(Planning::Index.index_path, Planning::Index.render.text)
++puts "regenerated INDEX.md"
++git("add", "--", "INDEX.md")
+ 
+ subject = "Adopt #{slug}"
+ if do_commit
+diff --git a/bin/check b/bin/check
+index 781f2f6..abb2843 100755
+--- a/bin/check
++++ b/bin/check
+@@ -1,7 +1,7 @@
+ #!/usr/bin/env ruby
+ # frozen_string_literal: true
+ 
+-# Verify README.md's generated index still matches the feature tree. That is the
++# Verify INDEX.md still matches the feature tree. That is the
+ # only thing this repo asserts — nothing inside a feature folder is validated.
+ 
+ # This repo pins its Ruby in .ruby-version; the library uses 3.x syntax, so
+@@ -15,8 +15,8 @@ if ARGV.include?("--help") || ARGV.include?("-h")
+   puts <<~TEXT
+     usage: bin/check
+ 
+-    Exits 0 when README.md's generated index matches the feature tree, 1 when it
+-    is stale. Run it before committing.
++    Exits 0 when INDEX.md matches the feature tree, 1 when it is missing or
++    stale. Run it before committing.
+   TEXT
+   exit 0
+ end
+diff --git a/bin/delete b/bin/delete
+index 00f5d59..1942bc4 100755
+--- a/bin/delete
++++ b/bin/delete
+@@ -114,9 +114,9 @@ end
+ FileUtils.rm_rf(feature.dir) if File.exist?(feature.dir)
+ puts "removed #{feature.rel_dir}/"
+ 
+-File.write(Planning::Index.readme_path, Planning::Index.render)
+-puts "regenerated README.md"
+-git("add", "--", "README.md")
++File.write(Planning::Index.index_path, Planning::Index.render.text)
++puts "regenerated INDEX.md"
++git("add", "--", "INDEX.md")
+ 
+ subject = "Delete #{slug}"
+ if do_commit
+diff --git a/bin/index b/bin/index
+index 1733784..39b644c 100755
+--- a/bin/index
++++ b/bin/index
+@@ -1,7 +1,7 @@
+ #!/usr/bin/env ruby
+ # frozen_string_literal: true
+ 
+-# Regenerate the GENERATED INDEX block in README.md from the feature tree.
++# Regenerate INDEX.md from the feature tree. The whole file is generated.
+ # Lifecycle comes from the path segment. Nothing else is read from the folder.
+ 
+ # This repo pins its Ruby in .ruby-version; the library uses 3.x syntax, so
+@@ -17,8 +17,8 @@ if ARGV.include?("--help") || ARGV.include?("-h")
+   puts <<~TEXT
+     usage: bin/index [--check]
+ 
+-      (no args)  rewrite the GENERATED INDEX block in README.md
+-      --check    exit 1 if the block would change; write nothing
++      (no args)  write INDEX.md from the feature tree
++      --check    exit 1 if INDEX.md is missing or would change; write nothing
+   TEXT
+   exit 0
+ end
+@@ -37,23 +37,40 @@ rescue => e
+   abort "bin/index: #{e.message}"
+ end
+ 
+-path = Planning::Index.readme_path
+-current = File.read(path, encoding: "UTF-8")
++path = Planning::Index.index_path
++exists = File.exist?(path)
++current = Planning::Index.current
+ 
+-if current == updated
+-  puts "bin/index: README.md is up to date."
++if exists && current == updated.text
++  puts "bin/index: INDEX.md is up to date."
+   exit 0
+ end
+ 
+ if mode == :check
++  # A repo that has only just adopted this tooling has no INDEX.md at all.
++  # That is a different message from a stale one, and not a stack trace.
++  unless exists
++    warn "bin/index: INDEX.md is missing; run bin/index"
++    exit 1
++  end
++
+   have = current.lines
+-  want = updated.lines
++  want = updated.text.lines
+   at = (0...[have.length, want.length].max).find { |i| have[i] != want[i] }
+-  warn "bin/index: README.md is out of date (first difference at line #{at.to_i + 1}); run bin/index"
++  warn "bin/index: INDEX.md is out of date (first difference at line #{at.to_i + 1}); run bin/index"
+   warn "  have: #{have[at].to_s.chomp.inspect}"
+   warn "  want: #{want[at].to_s.chomp.inspect}"
+   exit 1
+ end
+ 
+-File.write(path, updated)
+-puts "bin/index: rewrote the generated index in README.md."
++File.write(path, updated.text)
++puts "bin/index: #{exists ? "rewrote" : "created"} INDEX.md."
++
++# Preserving a hand-edited title is invisible in the diff when it works, and
++# indistinguishable from losing it when it does not. So say which happened.
++unless updated.kept.empty?
++  puts "  kept #{updated.kept.length} title#{"s" unless updated.kept.length == 1} already in the index"
++end
++unless updated.derived.empty?
++  puts "  derived #{updated.derived.length} from the folder: #{updated.derived.join(", ")}"
++end
+diff --git a/bin/lib/planning.rb b/bin/lib/planning.rb
+index 8b4f0bb..d9bd71e 100644
+--- a/bin/lib/planning.rb
++++ b/bin/lib/planning.rb
+@@ -46,8 +46,8 @@ module Planning
+     end
+ 
+     # The last commit that touched the folder — or today, when the folder has
+-    # uncommitted changes. Without the second half, `bin/move` would write a
+-    # README that goes stale the moment it commits the move it just staged.
++    # uncommitted changes. Without the second half, `bin/move` would write an
++    # index that goes stale the moment it commits the move it just staged.
+     def updated
+       @updated ||= dirty? ? Date.today : (last_commit_date || Date.today)
+     end
+@@ -88,44 +88,90 @@ module Planning
+     end
+   end
+ 
+-  # Renders the block between the GENERATED INDEX markers in README.md.
++  # Renders INDEX.md, which is generated in full. README.md is hand-written and
++  # nothing here touches it.
+   module Index
+-    BEGIN_RE = /^<!--\s*BEGIN GENERATED INDEX\b.*?-->\s*$/
+-    END_RE = /^<!--\s*END GENERATED INDEX\b.*?-->\s*$/
++    PREAMBLE = <<~MARKDOWN
++      # Feature index
++
++      Generated by `bin/index` — every row is a folder under `features/`, filed
++      under the lifecycle whose directory it sits in.
++    MARKDOWN
++
++    # A row as bin/index writes it: | [Title](features/<lifecycle>/<slug>/) | date |
++    ROW_RE = %r{^\|\s*\[(?<title>.+)\]\((?<path>features/[^)]+?)/?\)\s*\|}
++
++    # What render produced, and where each title came from. bin/index reports the
++    # provenance; every other caller only wants the text.
++    Result = Struct.new(:text, :kept, :derived)
+ 
+     module_function
+ 
+-    def readme_path(root = ROOT) = File.join(root, "README.md")
++    def index_path(root = ROOT) = File.join(root, "INDEX.md")
++
++    # INDEX.md as it stands, or "" when it does not exist yet. A missing file is
++    # an ordinary state, not an error: a fresh clone has not generated one, and
++    # neither has a repo that just adopted this tooling.
++    def current(root = ROOT)
++      path = index_path(root)
++      File.exist?(path) ? File.read(path, encoding: "UTF-8") : ""
++    end
++
++    # Titles already present in INDEX.md, keyed by rel_dir *and* by slug. The
++    # rel_dir key is exact, which keeps two folders sharing a slug apart. The
++    # slug key is what carries a corrected title through a bin/move, where the
++    # row's path changes but the folder is plainly the same one.
++    #
++    # Anything that does not parse is simply not found, so a mangled table costs
++    # you the hand-edits it mangled and nothing else.
++    def parse(text)
++      text.to_s.lines.each_with_object({}) do |line, found|
++        match = ROW_RE.match(line)
++        next unless match
++
++        title = match[:title].gsub("\\|", "|").strip
++        next if title.empty?
++
++        found[match[:path]] = title
++        found[File.basename(match[:path])] ||= title
++      end
++    end
+ 
++    # The index is regenerated from the tree, but the title column is free text:
++    # a title already in the file wins over the one scraped from the folder, so
++    # correcting a bad heading by hand sticks.
+     def render(root = ROOT)
+       features = Feature.all(root)
+-      block = LIFECYCLES.map { |lifecycle|
+-        table(lifecycle, features.select { |feature| feature.lifecycle == lifecycle })
++      known = parse(current(root))
++      kept = []
++      derived = []
++
++      titles = features.to_h { |feature|
++        existing = known[feature.rel_dir] || known[feature.slug]
++        (existing ? kept : derived) << feature.slug
++        [feature.rel_dir, existing || feature.title]
++      }
++
++      tables = LIFECYCLES.map { |lifecycle|
++        table(lifecycle, features.select { |feature| feature.lifecycle == lifecycle }, titles)
+       }.join
+-      splice(File.read(readme_path(root), encoding: "UTF-8"), block.rstrip)
++
++      Result.new("#{PREAMBLE}\n#{tables}".rstrip + "\n", kept, derived)
+     end
+ 
+-    def table(lifecycle, features)
++    def table(lifecycle, features, titles = {})
+       out = +"## #{lifecycle.capitalize}\n\n"
+       return out << "_None._\n\n" if features.empty?
+ 
+       out << "| Feature | Updated |\n| --- | --- |\n"
+       features
+-        .sort_by { |feature| [-feature.updated.jd, feature.title.downcase] }
+-        .each { |feature| out << "| [#{escape(feature.title)}](#{feature.rel_dir}/) | #{feature.updated} |\n" }
++        .sort_by { |feature| [-feature.updated.jd, title_for(feature, titles).downcase] }
++        .each { |feature| out << "| [#{escape(title_for(feature, titles))}](#{feature.rel_dir}/) | #{feature.updated} |\n" }
+       out << "\n"
+     end
+ 
+-    def escape(text) = text.to_s.gsub("|", "\\|").gsub(/\s+/, " ").strip
++    def title_for(feature, titles) = titles.fetch(feature.rel_dir, feature.title)
+ 
+-    def splice(readme, block)
+-      lines = readme.lines
+-      first = lines.index { |line| line.match?(BEGIN_RE) }
+-      last = lines.index { |line| line.match?(END_RE) }
+-      raise "README.md has no GENERATED INDEX markers" if first.nil? || last.nil?
+-      raise "README.md END marker precedes BEGIN marker" if last < first
+-
+-      (lines[0..first] + ["\n", block, "\n", "\n"] + lines[last..]).join
+-    end
++    def escape(text) = text.to_s.gsub("|", "\\|").gsub(/\s+/, " ").strip
+   end
+ end
+diff --git a/bin/move b/bin/move
+index c76f4fc..2f7206b 100755
+--- a/bin/move
++++ b/bin/move
+@@ -98,10 +98,10 @@ end
+ 
+ git("mv", feature.rel_dir, destination)
+ 
+-File.write(Planning::Index.readme_path, Planning::Index.render)
+-puts "regenerated README.md"
++File.write(Planning::Index.index_path, Planning::Index.render.text)
++puts "regenerated INDEX.md"
+ 
+-git("add", "--", "features", "README.md")
++git("add", "--", "features", "INDEX.md")
+ 
+ subject = "Move #{slug} to #{target}"
+ if do_commit
+diff --git a/bin/test b/bin/test
+new file mode 100755
+index 0000000..3e4df66
+--- /dev/null
++++ b/bin/test
+@@ -0,0 +1,30 @@
++#!/usr/bin/env ruby
++# frozen_string_literal: true
++
++# Run the test suite. Minitest ships with Ruby, so there is nothing to install
++# and no Gemfile to keep in step — same stdlib-only rule the lib follows.
++#
++# Tests cover bin/lib/planning.rb. The scripts in this directory resolve
++# Planning::ROOT from __dir__ at load time, which makes them awkward to point at
++# a fixture; they are covered by the manual walkthrough in README.md instead.
++
++if RUBY_VERSION < "3.0"
++  abort "bin/test: needs Ruby 3.0+, found #{RUBY_VERSION}. " \
++        "Run it from the repo root so .ruby-version applies."
++end
++
++if ARGV.include?("--help") || ARGV.include?("-h")
++  puts <<~TEXT
++    usage: bin/test
++
++    Runs every test/*_test.rb. Any other arguments are passed through to
++    Minitest, so `bin/test -n /title/` filters by name.
++  TEXT
++  exit 0
++end
++
++root = File.expand_path("..", __dir__)
++files = Dir.glob(File.join(root, "test", "*_test.rb")).sort
++abort "bin/test: no test files found under test/" if files.empty?
++
++files.each { |file| require file }
+diff --git a/test/helper.rb b/test/helper.rb
+new file mode 100644
+index 0000000..c220f36
+--- /dev/null
++++ b/test/helper.rb
+@@ -0,0 +1,99 @@
++# frozen_string_literal: true
++
++# Fixture builders for the Planning lib tests.
++#
++# Two levels, because only one thing in the lib touches git:
++#
++#   tmp_tree   a plain directory tree. Everything that reads files — titles,
++#              lookups, table rendering — needs nothing more than this.
++#   tmp_repo   tmp_tree plus `git init`, for the four tests that exercise
++#              Feature#updated, which shells out to `git log` and
++#              `git status`. Nothing else should reach for it.
++#
++# In a plain tmp_tree those git calls fail, Feature#updated falls through to
++# Date.today, and that is a perfectly good fixture for anything that does not
++# care what the date is.
++#
++# Stdlib only, matching the lib itself. Minitest ships with Ruby.
++
++require "minitest/autorun"
++require "fileutils"
++require "tmpdir"
++require "date"
++
++require_relative "../bin/lib/planning"
++
++module Fixtures
++  # A README still carrying the old generated-index markers, as a repo that has
++  # not yet been cleaned up would have. Nothing in the lib may touch this file
++  # any more, and one test exists to prove it.
++  README = <<~MARKDOWN
++    # planning
++
++    Intro prose that must survive.
++
++    <!-- BEGIN GENERATED INDEX — edited by bin/index, do not hand-edit -->
++
++    stale content
++
++    <!-- END GENERATED INDEX -->
++
++    Trailing prose that must survive.
++  MARKDOWN
++
++  # A fixed date for committed fixtures, well clear of Date.today so tests can
++  # tell "last commit" and "today" apart without ambiguity.
++  COMMITTED_ON = "2020-01-02"
++
++  def tmp_tree
++    Dir.mktmpdir("planning-test") do |root|
++      Planning::LIFECYCLES.each do |lifecycle|
++        FileUtils.mkdir_p(File.join(root, "features", lifecycle))
++      end
++      File.write(File.join(root, "README.md"), README)
++      yield root
++    end
++  end
++
++  def tmp_repo
++    tmp_tree do |root|
++      git(root, "init", "--quiet")
++      git(root, "config", "user.email", "test@example.invalid")
++      git(root, "config", "user.name", "Planning Tests")
++      git(root, "config", "commit.gpgsign", "false")
++      yield root
++    end
++  end
++
++  # Writes a feature folder. `files` maps relative names to contents, so a
++  # folder with nothing in it is just as easy to build as a fully worked one.
++  def feature(root, lifecycle, slug, files = {})
++    dir = File.join(root, "features", lifecycle, slug)
++    FileUtils.mkdir_p(dir)
++    files.each do |name, content|
++      path = File.join(dir, name)
++      FileUtils.mkdir_p(File.dirname(path))
++      File.write(path, content)
++    end
++    dir
++  end
++
++  def git(root, *args, date: nil)
++    env = date ? {"GIT_AUTHOR_DATE" => "#{date}T12:00:00+0000", "GIT_COMMITTER_DATE" => "#{date}T12:00:00+0000"} : {}
++    ok = system(env, "git", "-C", root, *args, out: File::NULL, err: File::NULL)
++    raise "fixture: git #{args.join(" ")} failed" unless ok
++  end
++
++  # Commits everything currently in the tree at a pinned date, so the Updated
++  # column is the same on every machine and every run.
++  def commit_all(root, message: "fixture", date: COMMITTED_ON)
++    git(root, "add", "-A")
++    git(root, "commit", "-m", message, date: date)
++  end
++
++  def today = Date.today.to_s
++end
++
++class PlanningTest < Minitest::Test
++  include Fixtures
++end
+diff --git a/test/planning_test.rb b/test/planning_test.rb
+new file mode 100644
+index 0000000..14fe8f3
+--- /dev/null
++++ b/test/planning_test.rb
+@@ -0,0 +1,418 @@
++# frozen_string_literal: true
++
++# Tests for bin/lib/planning.rb. Most of these started as characterization of
++# behavior that predates them, so where one looks like it is pinning down
++# something odd, that is the point — the oddity is the behavior, and a change to
++# it should show up here as a deliberate edit rather than as a surprise.
++
++require_relative "helper"
++
++class FeatureLookupTest < PlanningTest
++  def test_all_returns_features_in_lifecycle_order
++    tmp_tree do |root|
++      Planning::LIFECYCLES.each { |lifecycle| feature(root, lifecycle, "thing") }
++
++      assert_equal Planning::LIFECYCLES, Planning::Feature.all(root).map(&:lifecycle)
++    end
++  end
++
++  def test_all_sorts_within_a_lifecycle
++    tmp_tree do |root|
++      %w[zebra apple mango].each { |slug| feature(root, "active", slug) }
++
++      assert_equal %w[apple mango zebra], Planning::Feature.all(root).map(&:slug)
++    end
++  end
++
++  def test_all_skips_dotfiles_and_plain_files
++    tmp_tree do |root|
++      feature(root, "active", "real")
++      feature(root, "active", ".hidden")
++      File.write(File.join(root, "features", "active", "loose.md"), "# Not a feature\n")
++
++      assert_equal %w[real], Planning::Feature.all(root).map(&:slug)
++    end
++  end
++
++  def test_find_returns_every_lifecycle_holding_the_slug
++    tmp_tree do |root|
++      feature(root, "active", "dupe")
++      feature(root, "shipped", "dupe")
++
++      found = Planning::Feature.find("dupe", root)
++
++      assert_equal %w[active shipped], found.map(&:lifecycle)
++    end
++  end
++
++  def test_find_returns_nothing_for_an_unknown_slug
++    tmp_tree do |root|
++      feature(root, "active", "real")
++
++      assert_empty Planning::Feature.find("imaginary", root)
++    end
++  end
++
++  def test_paths
++    tmp_tree do |root|
++      feature(root, "proposed", "static-site-https")
++      found = Planning::Feature.find("static-site-https", root).first
++
++      assert_equal "features/proposed/static-site-https", found.rel_dir
++      assert_equal File.join(root, "features/proposed/static-site-https"), found.dir
++    end
++  end
++end
++
++class FeatureTitleTest < PlanningTest
++  def title_for(files)
++    tmp_tree do |root|
++      feature(root, "proposed", "some-slug", files)
++      return Planning::Feature.find("some-slug", root).first.title
++    end
++  end
++
++  def test_reads_the_first_h1_from_the_spec
++    assert_equal "Static site HTTPS",
++      title_for("feature-specification.md" => "# Static site HTTPS\n\nProse.\n")
++  end
++
++  def test_strips_a_leading_label
++    assert_equal "Static site HTTPS",
++      title_for("feature-specification.md" => "# Feature Specification: Static site HTTPS\n")
++  end
++
++  def test_trims_trailing_hashes
++    assert_equal "Closing hashes",
++      title_for("feature-specification.md" => "# Closing hashes ###\n")
++  end
++
++  def test_prefers_the_spec_over_an_alphabetically_earlier_file
++    assert_equal "From the spec", title_for(
++      "aaa-earlier.md" => "# From the other file\n",
++      "feature-specification.md" => "# From the spec\n"
++    )
++  end
++
++  def test_falls_back_to_any_other_top_level_markdown
++    assert_equal "From the notes", title_for("notes.md" => "# From the notes\n")
++  end
++
++  def test_ignores_headings_below_the_top_level_of_the_folder
++    assert_equal "some-slug", title_for("artifacts/decision-log.md" => "# Buried heading\n")
++  end
++
++  def test_falls_back_to_the_slug_when_no_heading_exists
++    assert_equal "some-slug", title_for("notes.md" => "Prose with no heading at all.\n")
++  end
++
++  def test_falls_back_to_the_slug_for_an_empty_folder
++    assert_equal "some-slug", title_for({})
++  end
++end
++
++class FeatureUpdatedTest < PlanningTest
++  def test_uses_the_last_commit_touching_the_folder
++    tmp_repo do |root|
++      feature(root, "active", "settled", "feature-specification.md" => "# Settled\n")
++      commit_all(root, date: "2020-01-02")
++
++      assert_equal "2020-01-02", Planning::Feature.find("settled", root).first.updated.to_s
++    end
++  end
++
++  def test_reports_today_when_the_folder_has_uncommitted_changes
++    tmp_repo do |root|
++      dir = feature(root, "active", "churning", "feature-specification.md" => "# Churning\n")
++      commit_all(root, date: "2020-01-02")
++      File.write(File.join(dir, "feature-specification.md"), "# Churning\n\nEdited.\n")
++
++      assert_equal today, Planning::Feature.find("churning", root).first.updated.to_s
++    end
++  end
++
++  def test_reports_today_for_a_folder_in_no_commit
++    tmp_repo do |root|
++      feature(root, "active", "brand-new", "feature-specification.md" => "# Brand new\n")
++
++      assert_equal today, Planning::Feature.find("brand-new", root).first.updated.to_s
++    end
++  end
++end
++
++class IndexEscapeTest < PlanningTest
++  def test_escapes_pipes_so_they_cannot_break_the_table
++    assert_equal "before \\| after", Planning::Index.escape("before | after")
++  end
++
++  def test_collapses_whitespace_onto_one_line
++    assert_equal "one two three", Planning::Index.escape("one\n  two\tthree")
++  end
++
++  def test_strips_surrounding_whitespace
++    assert_equal "trimmed", Planning::Index.escape("  trimmed  ")
++  end
++end
++
++class IndexTableTest < PlanningTest
++  def test_renders_none_for_an_empty_lifecycle
++    assert_equal "## Active\n\n_None._\n\n", Planning::Index.table("active", [])
++  end
++
++  def test_renders_a_row_per_feature
++    tmp_tree do |root|
++      feature(root, "proposed", "static-site-https", "feature-specification.md" => "# Static site HTTPS\n")
++
++      table = Planning::Index.table("proposed", Planning::Feature.all(root))
++
++      assert_equal <<~MARKDOWN, table
++        ## Proposed
++
++        | Feature | Updated |
++        | --- | --- |
++        | [Static site HTTPS](features/proposed/static-site-https/) | #{today} |
++
++      MARKDOWN
++    end
++  end
++
++  def test_sorts_newest_first
++    tmp_repo do |root|
++      feature(root, "active", "older", "feature-specification.md" => "# Older\n")
++      commit_all(root, date: "2020-01-02")
++      feature(root, "active", "newer", "feature-specification.md" => "# Newer\n")
++      commit_all(root, date: "2021-06-07")
++
++      table = Planning::Index.table("active", Planning::Feature.all(root))
++
++      assert_operator table.index("Newer"), :<, table.index("Older")
++    end
++  end
++
++  def test_breaks_ties_on_title_case_insensitively
++    tmp_tree do |root|
++      feature(root, "active", "zebra", "feature-specification.md" => "# zebra\n")
++      feature(root, "active", "apple", "feature-specification.md" => "# Apple\n")
++
++      table = Planning::Index.table("active", Planning::Feature.all(root))
++
++      assert_operator table.index("Apple"), :<, table.index("zebra")
++    end
++  end
++end
++
++class IndexCurrentTest < PlanningTest
++  def test_points_at_index_md
++    assert_equal File.join("/somewhere", "INDEX.md"), Planning::Index.index_path("/somewhere")
++  end
++
++  def test_reads_the_file_when_it_exists
++    tmp_tree do |root|
++      File.write(File.join(root, "INDEX.md"), "# Feature index\n")
++
++      assert_equal "# Feature index\n", Planning::Index.current(root)
++    end
++  end
++
++  # A repo that has only just adopted this tooling has no INDEX.md. Callers
++  # compare against this, so it has to be a string rather than an exception.
++  def test_returns_empty_when_the_file_is_missing
++    tmp_tree do |root|
++      refute_path_exists File.join(root, "INDEX.md")
++
++      assert_equal "", Planning::Index.current(root)
++    end
++  end
++end
++
++class IndexRenderTest < PlanningTest
++  def test_renders_a_whole_file_not_a_spliced_block
++    tmp_tree do |root|
++      rendered = Planning::Index.render(root).text
++
++      assert rendered.start_with?("# Feature index\n"), "expected a heading of its own"
++      assert_equal rendered, rendered.rstrip + "\n", "expected exactly one trailing newline"
++      refute_includes rendered, "GENERATED INDEX"
++    end
++  end
++
++  def test_renders_every_lifecycle
++    tmp_tree do |root|
++      feature(root, "proposed", "static-site-https", "feature-specification.md" => "# Static site HTTPS\n")
++
++      rendered = Planning::Index.render(root).text
++
++      assert_includes rendered, "| [Static site HTTPS](features/proposed/static-site-https/) | #{today} |"
++      %w[Active Proposed Shipped Abandoned].each { |heading| assert_includes rendered, "## #{heading}" }
++      assert_equal 3, rendered.scan("_None._").length
++    end
++  end
++
++  # README.md is hand-written now. Nothing in the lib may read or rewrite it.
++  def test_leaves_the_readme_alone
++    tmp_tree do |root|
++      before = File.read(File.join(root, "README.md"))
++      Planning::Index.render(root)
++
++      assert_equal before, File.read(File.join(root, "README.md"))
++    end
++  end
++end
++
++class IndexParseTest < PlanningTest
++  ROW = "| [Static site HTTPS](features/proposed/static-site-https/) | 2020-01-02 |\n"
++
++  def test_keys_a_row_by_both_path_and_slug
++    found = Planning::Index.parse(ROW)
++
++    assert_equal "Static site HTTPS", found["features/proposed/static-site-https"]
++    assert_equal "Static site HTTPS", found["static-site-https"]
++  end
++
++  def test_unescapes_a_pipe
++    found = Planning::Index.parse("| [Before \\| after](features/active/piped/) | 2020-01-02 |\n")
++
++    assert_equal "Before | after", found["piped"]
++  end
++
++  def test_ignores_prose_headings_and_broken_rows
++    found = Planning::Index.parse("# Feature index\n\n## Active\n\n_None._\n\n| not a row |\n")
++
++    assert_empty found
++  end
++
++  def test_first_lifecycle_wins_the_shared_slug_key_but_paths_stay_exact
++    found = Planning::Index.parse(
++      "| [From active](features/active/dupe/) | 2020-01-02 |\n" \
++      "| [From shipped](features/shipped/dupe/) | 2020-01-02 |\n"
++    )
++
++    assert_equal "From active", found["dupe"]
++    assert_equal "From active", found["features/active/dupe"]
++    assert_equal "From shipped", found["features/shipped/dupe"]
++  end
++end
++
++class IndexPreservesTitlesTest < PlanningTest
++  def index!(root) = File.write(File.join(root, "INDEX.md"), Planning::Index.render(root).text)
++
++  def retitle!(root, from, to)
++    path = File.join(root, "INDEX.md")
++    File.write(path, File.read(path).sub(from, to))
++  end
++
++  def test_a_hand_edited_title_survives_regeneration
++    tmp_tree do |root|
++      feature(root, "proposed", "static-site-https", "feature-specification.md" => "# Static site HTTPS\n")
++      index!(root)
++      retitle!(root, "Static site HTTPS", "Cert renewal for the marketing site")
++
++      result = Planning::Index.render(root)
++
++      assert_includes result.text, "[Cert renewal for the marketing site]"
++      refute_includes result.text, "[Static site HTTPS]"
++      assert_equal %w[static-site-https], result.kept
++      assert_empty result.derived
++    end
++  end
++
++  # The row's path changes when a feature moves, so the slug key is the only
++  # thing holding the corrected title on. This is the case most likely to
++  # regress silently.
++  def test_a_hand_edited_title_survives_a_lifecycle_change
++    tmp_tree do |root|
++      feature(root, "proposed", "static-site-https", "feature-specification.md" => "# Static site HTTPS\n")
++      index!(root)
++      retitle!(root, "Static site HTTPS", "Cert renewal")
++
++      FileUtils.mv(File.join(root, "features/proposed/static-site-https"),
++        File.join(root, "features/active/static-site-https"))
++      result = Planning::Index.render(root)
++
++      assert_includes result.text, "| [Cert renewal](features/active/static-site-https/) |"
++      assert_equal %w[static-site-https], result.kept
++    end
++  end
++
++  def test_a_new_folder_derives_its_title_while_neighbours_stay_put
++    tmp_tree do |root|
++      feature(root, "proposed", "existing", "feature-specification.md" => "# Existing\n")
++      index!(root)
++      retitle!(root, "Existing", "Corrected by hand")
++      feature(root, "proposed", "arrival", "feature-specification.md" => "# Arrival\n")
++
++      result = Planning::Index.render(root)
++
++      assert_includes result.text, "[Corrected by hand]"
++      assert_includes result.text, "[Arrival]"
++      assert_equal %w[existing], result.kept
++      assert_equal %w[arrival], result.derived
++    end
++  end
++
++  def test_a_row_whose_folder_is_gone_is_dropped
++    tmp_tree do |root|
++      feature(root, "proposed", "departing", "feature-specification.md" => "# Departing\n")
++      index!(root)
++      FileUtils.rm_rf(File.join(root, "features/proposed/departing"))
++
++      result = Planning::Index.render(root)
++
++      refute_includes result.text, "Departing"
++      assert_equal 4, result.text.scan("_None._").length
++    end
++  end
++
++  def test_a_mangled_table_falls_back_to_the_folder_rather_than_crashing
++    tmp_tree do |root|
++      feature(root, "proposed", "static-site-https", "feature-specification.md" => "# Static site HTTPS\n")
++      File.write(File.join(root, "INDEX.md"), "# Feature index\n\nsomeone deleted the tables\n")
++
++      result = Planning::Index.render(root)
++
++      assert_includes result.text, "[Static site HTTPS]"
++      assert_equal %w[static-site-https], result.derived
++    end
++  end
++
++  def test_a_pipe_in_a_hand_edited_title_round_trips
++    tmp_tree do |root|
++      feature(root, "proposed", "piped", "feature-specification.md" => "# Plain\n")
++      index!(root)
++      retitle!(root, "Plain", "Before \\| after")
++
++      result = Planning::Index.render(root)
++
++      assert_includes result.text, "[Before \\| after]"
++      assert_equal %w[piped], result.kept
++    end
++  end
++
++  # Titles feed the sort, so correcting one can reorder rows. bin/check flags
++  # that, bin/index rewrites it, and it settles. Correct, not a bug.
++  def test_a_corrected_title_reorders_rows_within_a_date
++    tmp_tree do |root|
++      feature(root, "active", "alpha", "feature-specification.md" => "# Alpha\n")
++      feature(root, "active", "beta", "feature-specification.md" => "# Beta\n")
++      index!(root)
++      retitle!(root, "Alpha", "Zulu")
++
++      text = Planning::Index.render(root).text
++
++      assert_operator text.index("[Beta]"), :<, text.index("[Zulu]")
++    end
++  end
++
++  # Seeding from the file it is compared against is what makes bin/check ignore
++  # the title column without any special-casing.
++  def test_rendering_twice_is_stable_after_a_hand_edit
++    tmp_tree do |root|
++      feature(root, "proposed", "static-site-https", "feature-specification.md" => "# Static site HTTPS\n")
++      index!(root)
++      retitle!(root, "Static site HTTPS", "Cert renewal")
++      index!(root)
++
++      assert_equal File.read(File.join(root, "INDEX.md")), Planning::Index.render(root).text
++    end
++  end
++end
