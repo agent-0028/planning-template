@@ -24,8 +24,9 @@ require "date"
 require_relative "../bin/lib/planning"
 
 module Fixtures
-  # A README carrying the same markers bin/index looks for. Deliberately has
-  # prose on both sides so splice tests can prove it leaves them alone.
+  # A README still carrying the old generated-index markers, as a repo that has
+  # not yet been cleaned up would have. Nothing in the lib may touch this file
+  # any more, and one test exists to prove it.
   README = <<~MARKDOWN
     # planning
 

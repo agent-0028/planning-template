@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-# Characterization tests: what bin/lib/planning.rb does today, before any of it
-# moves. Where a test looks like it is pinning down something odd, that is the
-# point — the oddity is the behavior, and a later change to it should show up
-# here as a deliberate edit rather than a surprise.
+# Tests for bin/lib/planning.rb. Most of these started as characterization of
+# behavior that predates them, so where one looks like it is pinning down
+# something odd, that is the point — the oddity is the behavior, and a change to
+# it should show up here as a deliberate edit rather than as a surprise.
 
 require_relative "helper"
 
@@ -201,60 +201,60 @@ class IndexTableTest < PlanningTest
   end
 end
 
-class IndexSpliceTest < PlanningTest
-  MARKERS = <<~MARKDOWN
-    before
-    <!-- BEGIN GENERATED INDEX -->
-    stale
-    <!-- END GENERATED INDEX -->
-    after
-  MARKDOWN
-
-  def test_replaces_only_what_sits_between_the_markers
-    spliced = Planning::Index.splice(MARKERS, "fresh")
-
-    assert_equal <<~MARKDOWN, spliced
-      before
-      <!-- BEGIN GENERATED INDEX -->
-
-      fresh
-
-      <!-- END GENERATED INDEX -->
-      after
-    MARKDOWN
+class IndexCurrentTest < PlanningTest
+  def test_points_at_index_md
+    assert_equal File.join("/somewhere", "INDEX.md"), Planning::Index.index_path("/somewhere")
   end
 
-  def test_raises_when_the_markers_are_missing
-    error = assert_raises(RuntimeError) { Planning::Index.splice("no markers here\n", "fresh") }
+  def test_reads_the_file_when_it_exists
+    tmp_tree do |root|
+      File.write(File.join(root, "INDEX.md"), "# Feature index\n")
 
-    assert_match(/no GENERATED INDEX markers/, error.message)
+      assert_equal "# Feature index\n", Planning::Index.current(root)
+    end
   end
 
-  def test_raises_when_the_markers_are_inverted
-    inverted = "<!-- END GENERATED INDEX -->\n<!-- BEGIN GENERATED INDEX -->\n"
-    error = assert_raises(RuntimeError) { Planning::Index.splice(inverted, "fresh") }
+  # A repo that has only just adopted this tooling has no INDEX.md. Callers
+  # compare against this, so it has to be a string rather than an exception.
+  def test_returns_empty_when_the_file_is_missing
+    tmp_tree do |root|
+      refute_path_exists File.join(root, "INDEX.md")
 
-    assert_match(/END marker precedes BEGIN marker/, error.message)
+      assert_equal "", Planning::Index.current(root)
+    end
   end
 end
 
 class IndexRenderTest < PlanningTest
-  def test_writes_into_the_readme
-    assert_equal File.join("/somewhere", "README.md"), Planning::Index.readme_path("/somewhere")
+  def test_renders_a_whole_file_not_a_spliced_block
+    tmp_tree do |root|
+      rendered = Planning::Index.render(root)
+
+      assert rendered.start_with?("# Feature index\n"), "expected a heading of its own"
+      assert_equal rendered, rendered.rstrip + "\n", "expected exactly one trailing newline"
+      refute_includes rendered, "GENERATED INDEX"
+    end
   end
 
-  def test_renders_every_lifecycle_and_keeps_the_surrounding_prose
+  def test_renders_every_lifecycle
     tmp_tree do |root|
       feature(root, "proposed", "static-site-https", "feature-specification.md" => "# Static site HTTPS\n")
 
       rendered = Planning::Index.render(root)
 
-      assert_includes rendered, "Intro prose that must survive."
-      assert_includes rendered, "Trailing prose that must survive."
-      refute_includes rendered, "stale content"
       assert_includes rendered, "| [Static site HTTPS](features/proposed/static-site-https/) | #{today} |"
       %w[Active Proposed Shipped Abandoned].each { |heading| assert_includes rendered, "## #{heading}" }
       assert_equal 3, rendered.scan("_None._").length
+    end
+  end
+
+  # README.md is hand-written now. Nothing in the lib may read or rewrite it.
+  def test_leaves_the_readme_alone
+    tmp_tree do |root|
+      before = File.read(File.join(root, "README.md"))
+      Planning::Index.render(root)
+
+      assert_equal before, File.read(File.join(root, "README.md"))
     end
   end
 end
