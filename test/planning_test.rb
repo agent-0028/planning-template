@@ -228,7 +228,7 @@ end
 class IndexRenderTest < PlanningTest
   def test_renders_a_whole_file_not_a_spliced_block
     tmp_tree do |root|
-      rendered = Planning::Index.render(root)
+      rendered = Planning::Index.render(root).text
 
       assert rendered.start_with?("# Feature index\n"), "expected a heading of its own"
       assert_equal rendered, rendered.rstrip + "\n", "expected exactly one trailing newline"
@@ -240,7 +240,7 @@ class IndexRenderTest < PlanningTest
     tmp_tree do |root|
       feature(root, "proposed", "static-site-https", "feature-specification.md" => "# Static site HTTPS\n")
 
-      rendered = Planning::Index.render(root)
+      rendered = Planning::Index.render(root).text
 
       assert_includes rendered, "| [Static site HTTPS](features/proposed/static-site-https/) | #{today} |"
       %w[Active Proposed Shipped Abandoned].each { |heading| assert_includes rendered, "## #{heading}" }
@@ -255,6 +255,164 @@ class IndexRenderTest < PlanningTest
       Planning::Index.render(root)
 
       assert_equal before, File.read(File.join(root, "README.md"))
+    end
+  end
+end
+
+class IndexParseTest < PlanningTest
+  ROW = "| [Static site HTTPS](features/proposed/static-site-https/) | 2020-01-02 |\n"
+
+  def test_keys_a_row_by_both_path_and_slug
+    found = Planning::Index.parse(ROW)
+
+    assert_equal "Static site HTTPS", found["features/proposed/static-site-https"]
+    assert_equal "Static site HTTPS", found["static-site-https"]
+  end
+
+  def test_unescapes_a_pipe
+    found = Planning::Index.parse("| [Before \\| after](features/active/piped/) | 2020-01-02 |\n")
+
+    assert_equal "Before | after", found["piped"]
+  end
+
+  def test_ignores_prose_headings_and_broken_rows
+    found = Planning::Index.parse("# Feature index\n\n## Active\n\n_None._\n\n| not a row |\n")
+
+    assert_empty found
+  end
+
+  def test_first_lifecycle_wins_the_shared_slug_key_but_paths_stay_exact
+    found = Planning::Index.parse(
+      "| [From active](features/active/dupe/) | 2020-01-02 |\n" \
+      "| [From shipped](features/shipped/dupe/) | 2020-01-02 |\n"
+    )
+
+    assert_equal "From active", found["dupe"]
+    assert_equal "From active", found["features/active/dupe"]
+    assert_equal "From shipped", found["features/shipped/dupe"]
+  end
+end
+
+class IndexPreservesTitlesTest < PlanningTest
+  def index!(root) = File.write(File.join(root, "INDEX.md"), Planning::Index.render(root).text)
+
+  def retitle!(root, from, to)
+    path = File.join(root, "INDEX.md")
+    File.write(path, File.read(path).sub(from, to))
+  end
+
+  def test_a_hand_edited_title_survives_regeneration
+    tmp_tree do |root|
+      feature(root, "proposed", "static-site-https", "feature-specification.md" => "# Static site HTTPS\n")
+      index!(root)
+      retitle!(root, "Static site HTTPS", "Cert renewal for the marketing site")
+
+      result = Planning::Index.render(root)
+
+      assert_includes result.text, "[Cert renewal for the marketing site]"
+      refute_includes result.text, "[Static site HTTPS]"
+      assert_equal %w[static-site-https], result.kept
+      assert_empty result.derived
+    end
+  end
+
+  # The row's path changes when a feature moves, so the slug key is the only
+  # thing holding the corrected title on. This is the case most likely to
+  # regress silently.
+  def test_a_hand_edited_title_survives_a_lifecycle_change
+    tmp_tree do |root|
+      feature(root, "proposed", "static-site-https", "feature-specification.md" => "# Static site HTTPS\n")
+      index!(root)
+      retitle!(root, "Static site HTTPS", "Cert renewal")
+
+      FileUtils.mv(File.join(root, "features/proposed/static-site-https"),
+        File.join(root, "features/active/static-site-https"))
+      result = Planning::Index.render(root)
+
+      assert_includes result.text, "| [Cert renewal](features/active/static-site-https/) |"
+      assert_equal %w[static-site-https], result.kept
+    end
+  end
+
+  def test_a_new_folder_derives_its_title_while_neighbours_stay_put
+    tmp_tree do |root|
+      feature(root, "proposed", "existing", "feature-specification.md" => "# Existing\n")
+      index!(root)
+      retitle!(root, "Existing", "Corrected by hand")
+      feature(root, "proposed", "arrival", "feature-specification.md" => "# Arrival\n")
+
+      result = Planning::Index.render(root)
+
+      assert_includes result.text, "[Corrected by hand]"
+      assert_includes result.text, "[Arrival]"
+      assert_equal %w[existing], result.kept
+      assert_equal %w[arrival], result.derived
+    end
+  end
+
+  def test_a_row_whose_folder_is_gone_is_dropped
+    tmp_tree do |root|
+      feature(root, "proposed", "departing", "feature-specification.md" => "# Departing\n")
+      index!(root)
+      FileUtils.rm_rf(File.join(root, "features/proposed/departing"))
+
+      result = Planning::Index.render(root)
+
+      refute_includes result.text, "Departing"
+      assert_equal 4, result.text.scan("_None._").length
+    end
+  end
+
+  def test_a_mangled_table_falls_back_to_the_folder_rather_than_crashing
+    tmp_tree do |root|
+      feature(root, "proposed", "static-site-https", "feature-specification.md" => "# Static site HTTPS\n")
+      File.write(File.join(root, "INDEX.md"), "# Feature index\n\nsomeone deleted the tables\n")
+
+      result = Planning::Index.render(root)
+
+      assert_includes result.text, "[Static site HTTPS]"
+      assert_equal %w[static-site-https], result.derived
+    end
+  end
+
+  def test_a_pipe_in_a_hand_edited_title_round_trips
+    tmp_tree do |root|
+      feature(root, "proposed", "piped", "feature-specification.md" => "# Plain\n")
+      index!(root)
+      retitle!(root, "Plain", "Before \\| after")
+
+      result = Planning::Index.render(root)
+
+      assert_includes result.text, "[Before \\| after]"
+      assert_equal %w[piped], result.kept
+    end
+  end
+
+  # Titles feed the sort, so correcting one can reorder rows. bin/check flags
+  # that, bin/index rewrites it, and it settles. Correct, not a bug.
+  def test_a_corrected_title_reorders_rows_within_a_date
+    tmp_tree do |root|
+      feature(root, "active", "alpha", "feature-specification.md" => "# Alpha\n")
+      feature(root, "active", "beta", "feature-specification.md" => "# Beta\n")
+      index!(root)
+      retitle!(root, "Alpha", "Zulu")
+
+      text = Planning::Index.render(root).text
+
+      assert_operator text.index("[Beta]"), :<, text.index("[Zulu]")
+    end
+  end
+
+  # Seeding from the file it is compared against is what makes bin/check ignore
+  # the title column without any special-casing.
+  def test_rendering_twice_is_stable_after_a_hand_edit
+    tmp_tree do |root|
+      feature(root, "proposed", "static-site-https", "feature-specification.md" => "# Static site HTTPS\n")
+      index!(root)
+      retitle!(root, "Static site HTTPS", "Cert renewal")
+      index!(root)
+
+      assert_equal File.read(File.join(root, "INDEX.md")), Planning::Index.render(root).text
     end
   end
 end

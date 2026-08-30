@@ -7,11 +7,13 @@
 ```
 features/<lifecycle>/<slug>/   # one folder per feature
 adr/                           # cross-cutting decisions
-INDEX.md                       # GENERATED — do not hand-edit
+INDEX.md                       # GENERATED, except the title column
 README.md                      # hand-written
 ```
 
 Lifecycle is one of `proposed`, `active`, `shipped`, `abandoned`. **The path is the state.** Nothing inside a folder records it.
+
+`INDEX.md` is rebuilt from the tree, but its title column is free text: a title already in the file wins over the one scraped from the folder, so a bad heading can be corrected in place and it sticks — through a `bin/move` as well. Delete a row to derive it from the folder again.
 
 ## What a feature is
 

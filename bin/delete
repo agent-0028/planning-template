@@ -114,7 +114,7 @@ end
 FileUtils.rm_rf(feature.dir) if File.exist?(feature.dir)
 puts "removed #{feature.rel_dir}/"
 
-File.write(Planning::Index.index_path, Planning::Index.render)
+File.write(Planning::Index.index_path, Planning::Index.render.text)
 puts "regenerated INDEX.md"
 git("add", "--", "INDEX.md")
 
