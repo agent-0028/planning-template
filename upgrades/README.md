@@ -11,6 +11,7 @@ Each folder here is one step, named `v<from>-v<to>`, and holds the patch plus a 
 | Upgrade | What it does |
 | --- | --- |
 | [v0-v1](v0-v1/) | Moves the generated index out of `README.md` into `INDEX.md`, makes the title column hand-editable, adds tests |
+| [v1-v2](v1-v2/) | Splits the docs into `README.md` (yours), `INSTRUCTIONS.md` and `AGENTS.md`; names which paths upgrades may rewrite; ships `CHANGELOG.md`; drops `adr/` |
 
 ## What earns a release
 
