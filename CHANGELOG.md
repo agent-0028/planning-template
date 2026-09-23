@@ -2,6 +2,19 @@
 
 Releases of this template, newest first. A release is a change repos built from this template must adopt to keep working — most commits here are not one. See [upgrades/](upgrades/) for how to move between versions.
 
+## v2 — 2026-09-23
+
+**Upgrading requires manual steps.** → [upgrades/v1-v2/](upgrades/v1-v2/)
+
+- `README.md` belongs to the repo that adopted this template. The template seeds it once and never writes to it again — this release is the last patch that will ever touch it. What it holds now is the case for keeping plans in the repo at all, not documentation of the scripts.
+- New `INSTRUCTIONS.md` holds the layout, the workflow, the commands, how the index is built, and the conventions for writing a plan folder. These had been split across `README.md` and `AGENTS.md`, described twice in different words; there is one copy now.
+- `AGENTS.md` keeps read scope and nothing else. In a repo this simple, what an agent needs to know and what a human needs to know are the same text, so only the rule about an agent's context budget is genuinely agent-specific.
+- `CLAUDE.md` imports `AGENTS.md` and `INSTRUCTIONS.md`. The import syntax is Claude Code's, so it stays in Claude Code's file; `AGENTS.md` carries an ordinary link for harnesses that do not resolve imports.
+- `INSTRUCTIONS.md` states which paths an upgrade may rewrite. `bin/`, `test/`, `AGENTS.md`, `INSTRUCTIONS.md`, `CLAUDE.md`, `VERSION` and `CHANGELOG.md` belong to the template; `README.md`, `features/` and `INDEX.md` belong to you; `upgrades/` arrives once and is never updated.
+- `CHANGELOG.md` now ships to repos made from this template, so a repo can see what its `VERSION` got it. Its absence before was an oversight, not a decision.
+- The `adr/` folder is gone. It was empty, unreferenced by any script, and ambiguous about whether an ADR in it described the planning repo or the services being planned.
+- Prose is no longer hard-wrapped. One paragraph is one line, enforced by nothing.
+
 ## v1 — 2026-08-30
 
 **Upgrading requires manual steps.** → [upgrades/v0-v1/](upgrades/v0-v1/)
