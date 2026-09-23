@@ -4,7 +4,7 @@ Splits the documentation three ways: a `README.md` your repo owns outright, a ne
 
 You are on v1 if `VERSION` contains `1`.
 
-**This upgrade needs manual work.** Steps 3 and 4 copy two files the patch deliberately leaves alone.
+**This upgrade needs manual work.** Step 3 is a judgment call about a folder, and steps 4 and 5 copy two files the patch deliberately leaves alone.
 
 ## 1. Get the patch
 
@@ -22,11 +22,22 @@ git apply --3way planning.patch
 
 Drop `--3way` if it complains. If you have edited anything under `bin/`, use `git apply --reject planning.patch` and resolve the `.rej` files by hand.
 
-The patch touches `bin/`, `test/`, `AGENTS.md`, `CLAUDE.md`, `VERSION`, the new `INSTRUCTIONS.md`, and it deletes `adr/.gitkeep`. It does **not** touch `README.md` or `CHANGELOG.md` — those are steps 3 and 4.
+The patch touches `bin/`, `test/`, `AGENTS.md`, `CLAUDE.md`, `VERSION`, the new `INSTRUCTIONS.md`, and it deletes `adr/.gitkeep`. It does **not** touch `README.md` or `CHANGELOG.md` — those are steps 4 and 5.
 
-If you filed anything in `adr/`, the patch leaves it alone; only the `.gitkeep` goes. Move those documents somewhere you own before the empty directory confuses anyone.
+## 3. Delete `adr/`, if you want to
 
-## 3. Copy in `CHANGELOG.md`
+**`adr/` is no longer part of this template.** It shipped as an empty directory with a `.gitkeep`, and nothing in `bin/` ever read or wrote it. It is not managed here any more, this release will not replace it, and no future release will mention it.
+
+The patch removes only the `.gitkeep`. Anything you actually filed in there is left exactly where it is, because the template has no business deleting your documents.
+
+So it is your call:
+
+- **Nothing in there you care about?** `rm -rf adr/` and commit. That is the expected outcome for most repos, since the folder was scaffolding nobody filled in.
+- **Documents in there you want?** Keep them. The folder is yours now like any other directory you created — move it, rename it, or leave it exactly as it is. Nothing here will touch it again.
+
+The reason it left: any organization adopting this already has somewhere architecture decisions live, and the folder never said whether a decision in it was about the planning repo or about the services being planned. An ambiguous, redundant, empty directory is worth removing rather than explaining.
+
+## 4. Copy in `CHANGELOG.md`
 
 ```bash
 curl -O https://raw.githubusercontent.com/agent-0028/planning-template/main/CHANGELOG.md
@@ -36,7 +47,7 @@ This file should have shipped with v1 and did not. It records what each version 
 
 If you already keep a `CHANGELOG.md` of your own, this one will collide with it. Keep yours and rename the template's to something else — nothing reads either file.
 
-## 4. Deal with your README, by hand
+## 5. Deal with your README, by hand
 
 Your `README.md` currently holds the template's documentation of its own scripts. All of that now lives in `INSTRUCTIONS.md`, which the patch installed in step 2.
 
@@ -56,7 +67,7 @@ Then edit it. It closes by telling you it is yours; that is meant literally.
 
 Either way, `README.md` stays out of every future patch. It is not that patching it is hard; it is that the file stopped being the template's business in this release.
 
-## 5. Run the tests
+## 6. Run the tests
 
 ```bash
 bin/test
@@ -71,5 +82,5 @@ Confirms the patch landed intact. This is the one moment someone who never touch
 - `AGENTS.md` keeps read scope and nothing else, plus a link for harnesses that do not resolve `CLAUDE.md` imports.
 - `CLAUDE.md` imports `AGENTS.md` and `INSTRUCTIONS.md`.
 - `INSTRUCTIONS.md` states which paths an upgrade may rewrite: `bin/`, `test/`, `AGENTS.md`, `INSTRUCTIONS.md`, `CLAUDE.md`, `VERSION` and `CHANGELOG.md` are the template's; `README.md`, `features/` and `INDEX.md` are yours; `upgrades/` arrives once and is never updated.
-- `adr/` is gone.
+- `adr/` is no longer part of the template. The patch removes its `.gitkeep`; deleting the folder is step 3 and is yours to decide.
 - Prose is no longer hard-wrapped, in this repo and in the template. Nothing enforces it.
