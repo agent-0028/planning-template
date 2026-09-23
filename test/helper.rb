@@ -41,6 +41,14 @@ module Fixtures
     Trailing prose that must survive.
   MARKDOWN
 
+  # The hand-written instructions. Like the README, nothing in the lib may read
+  # or rewrite it; the same test covers both.
+  INSTRUCTIONS = <<~MARKDOWN
+    # Instructions
+
+    Prose that must survive untouched.
+  MARKDOWN
+
   # A fixed date for committed fixtures, well clear of Date.today so tests can
   # tell "last commit" and "today" apart without ambiguity.
   COMMITTED_ON = "2020-01-02"
@@ -51,6 +59,7 @@ module Fixtures
         FileUtils.mkdir_p(File.join(root, "features", lifecycle))
       end
       File.write(File.join(root, "README.md"), README)
+      File.write(File.join(root, "INSTRUCTIONS.md"), INSTRUCTIONS)
       yield root
     end
   end

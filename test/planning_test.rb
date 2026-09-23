@@ -248,13 +248,14 @@ class IndexRenderTest < PlanningTest
     end
   end
 
-  # README.md is hand-written now. Nothing in the lib may read or rewrite it.
-  def test_leaves_the_readme_alone
+  # README.md belongs to the repo that adopted the template, and INSTRUCTIONS.md
+  # to the template. Both are hand-written; nothing in the lib may rewrite either.
+  def test_leaves_the_hand_written_docs_alone
     tmp_tree do |root|
-      before = File.read(File.join(root, "README.md"))
+      before = %w[README.md INSTRUCTIONS.md].to_h { |f| [f, File.read(File.join(root, f))] }
       Planning::Index.render(root)
 
-      assert_equal before, File.read(File.join(root, "README.md"))
+      before.each { |f, text| assert_equal text, File.read(File.join(root, f)) }
     end
   end
 end

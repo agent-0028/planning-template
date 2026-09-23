@@ -6,7 +6,8 @@
 #
 # Tests cover bin/lib/planning.rb. The scripts in this directory resolve
 # Planning::ROOT from __dir__ at load time, which makes them awkward to point at
-# a fixture; they are covered by the manual walkthrough in README.md instead.
+# a fixture; they are covered by the manual walkthrough in INSTRUCTIONS.md
+# instead.
 
 if RUBY_VERSION < "3.0"
   abort "bin/test: needs Ruby 3.0+, found #{RUBY_VERSION}. " \
