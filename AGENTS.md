@@ -6,7 +6,6 @@
 
 ```
 features/<lifecycle>/<slug>/   # one folder per feature
-adr/                           # cross-cutting decisions
 INDEX.md                       # GENERATED, except the title column
 README.md                      # hand-written
 ```
