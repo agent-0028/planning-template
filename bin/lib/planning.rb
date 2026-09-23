@@ -88,8 +88,9 @@ module Planning
     end
   end
 
-  # Renders INDEX.md, which is generated in full. README.md is hand-written and
-  # nothing here touches it.
+  # Renders INDEX.md, which is generated in full. README.md and INSTRUCTIONS.md
+  # are written by hand — one by the repo that adopted this template, one by the
+  # template itself — and nothing here touches either.
   module Index
     PREAMBLE = <<~MARKDOWN
       # Feature index
