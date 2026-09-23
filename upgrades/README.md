@@ -18,8 +18,8 @@ self-contained, so read the one you are applying and ignore the rest.
 ## What earns a release
 
 **Only a change downstream repos must adopt to keep working.** Script behavior
-and the file contract, yes. Doc fixes, added tests, README prose, and new ADRs,
-no.
+and the file contract, yes. Doc fixes, added tests, README prose, and comment
+cleanups, no.
 
 Most commits to this template will never bump `VERSION` or produce a folder
 here. That is the intended ratio, and the rule above is what keeps it — without
