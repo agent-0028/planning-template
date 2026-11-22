@@ -1,0 +1,1808 @@
+diff --git a/AGENTS.md b/AGENTS.md
+index 23fc825..e9a70e3 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -4,10 +4,17 @@
+ 
+ Not using Claude Code? Read [INSTRUCTIONS.md](INSTRUCTIONS.md) first — it covers the layout, the commands, and the conventions for writing a plan. Claude Code loads it automatically.
+ 
++## Orient with `bin/toc`
++
++Run `bin/toc` before anything else. It lists every feature in flight — `active` and `proposed` — by slug, with each top-level document's title, path, and last-commit date. Treat it as the map; do not glob or list `features/` to find your way around.
++
+ ## Read scope
+ 
+-- Default to `features/active/` only.
+-- Read `features/proposed/` when drafting or reviewing a not-yet-approved feature.
+-- Do NOT read `features/shipped/` or `features/abandoned/` unless the task names a specific feature there, or asks about prior art. `INDEX.md` lists every feature in one line each — use it before opening an archived folder.
++`bin/toc` lists more than you should read. Listing is cheap; reading is not.
++
++- Read `features/active/` by default.
++- Open a `features/proposed/` folder only when drafting or reviewing a not-yet-approved feature.
++- Run `bin/toc --shipped` and/or `bin/toc --abandoned` only when the task names a feature there or asks about prior art, and open only the folders you need.
++- Never run `bin/toc --all` to orient. On a busy team, shipped and abandoned plans far outnumber live ones, and keeping them out of view is the reason the lifecycle folders exist.
+ 
+-This is the one rule here that has no meaning for a human reader. Everything else about working in this repo applies to both, and lives in [INSTRUCTIONS.md](INSTRUCTIONS.md).
++These are the rules here that have no meaning for a human reader. Everything else about working in this repo applies to both, and lives in [INSTRUCTIONS.md](INSTRUCTIONS.md).
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index ab667d1..cc76405 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -2,6 +2,18 @@
+ 
+ Releases of this template, newest first. A release is a change repos built from this template must adopt to keep working — most commits here are not one. See [upgrades/](upgrades/) for how to move between versions.
+ 
++## v3 — 2026-11-21
++
++**Upgrading requires manual steps.** → [upgrades/v2-v3/](upgrades/v2-v3/)
++
++- The generated `INDEX.md` is gone. It was rewritten by nearly every change to any feature, so parallel branches conflicted on it constantly. `bin/toc` replaces it: a table of contents read live from the feature tree, never written and never committed.
++- `bin/toc` lists each feature by slug and each top-level document by its first `#` heading, with its path and last-commit date, all sorted alphabetically. By default it shows `active` and `proposed` only; `--shipped` and `--abandoned` show those instead, alone or together, and `--all` shows everything.
++- **Hand-edited index titles are not carried over.** A document's heading is now its only title. Existing `INDEX.md` files are left in place, marked deprecated by the upgrade; delete yours whenever you like.
++- `bin/index` and `bin/adopt` are removed. To add a feature, put the folder under `features/<lifecycle>/` and `git add` it; from elsewhere, `mv` it there first.
++- `bin/move` works on folders git does not track yet. It moves on disk and stages the whole folder. Neither it nor `bin/delete` touches `INDEX.md` any more.
++- `bin/check` no longer checks an index. It warns about top-level documents with no heading in active and proposed features, and about a missing `CHANGELOG.md`. Warnings never fail it.
++- `AGENTS.md` tells agents to orient with `bin/toc` and keeps shipped and abandoned plans out of the default read scope.
++
+ ## v2 — 2026-09-23
+ 
+ **Upgrading requires manual steps.** → [upgrades/v1-v2/](upgrades/v1-v2/)
+diff --git a/INSTRUCTIONS.md b/INSTRUCTIONS.md
+index dab672c..e44b5ab 100644
+--- a/INSTRUCTIONS.md
++++ b/INSTRUCTIONS.md
+@@ -6,7 +6,6 @@ How this repo works, for humans and agents alike. The template maintains this fi
+ 
+ ```
+ features/<lifecycle>/<slug>/   # one folder per feature
+-INDEX.md                       # GENERATED, except the title column
+ README.md                      # yours
+ ```
+ 
+@@ -20,68 +19,65 @@ What goes inside is up to whoever writes it. File names and sections are convent
+ 
+ ## Workflow
+ 
+-1. Put a feature folder in `features/proposed/<slug>/` — or in any lifecycle folder, if it already belongs somewhere else
+-2. `bin/adopt <slug>` to track it and put it in the index
+-3. `bin/move <slug> active` when the work is approved
+-4. Build. Each PR body carries `Spec: planning@<sha> <slug>`
+-5. `bin/move <slug> shipped` when it lands, or `abandoned` if it does not
++1. Put a feature folder in `features/proposed/<slug>/` — or in any lifecycle folder, if it already belongs somewhere else — and `git add` it
++2. `bin/move <slug> active` when the work is approved
++3. Build. Each PR body carries `Spec: planning@<sha> <slug>`
++4. `bin/move <slug> shipped` when it lands, or `abandoned` if it does not
+ 
+-Step 3 is a file move, which means it can be a pull request — an approval gate for a plan, reviewed with the same machinery as code. It can equally be one person running one command. The repo makes review possible without requiring it.
++Step 2 is a file move, which means it can be a pull request — an approval gate for a plan, reviewed with the same machinery as code. It can equally be one person running one command. The repo makes review possible without requiring it.
+ 
+ ## Commands
+ 
+ ```bash
+-# adopt a folder where it sits
+-bin/adopt <slug>
++# list what is in flight: active and proposed
++bin/toc
+ 
+-# import a folder or file from anywhere else
+-bin/adopt <path> [slug]
++# list finished plans instead — either flag alone, or both together
++bin/toc --shipped
++bin/toc --abandoned
+ 
+-# change lifecycle, regenerate the index
++# list every lifecycle
++bin/toc --all
++
++# change lifecycle
+ bin/move <slug> <lifecycle>
+ 
+ # remove a feature folder
+ bin/delete <slug>
+ 
+-# regenerate INDEX.md
+-bin/index
+-
+-# verify INDEX.md matches the tree
++# run the repo-level checks
+ bin/check
+ ```
+ 
+-`bin/adopt` gets a folder into the tree, in whichever lifecycle folder you dropped it — it never asks which, because the path already says. `bin/move` changes that lifecycle afterward, and nothing else should.
++There is no command for adding a feature. Put the folder under `features/<lifecycle>/` and `git add` it; a folder or file from elsewhere is `mv` and then `git add`. Nothing needs to be regenerated afterward, because nothing is generated.
+ 
+-Never `git mv` a feature folder by hand. `bin/adopt` and `bin/move` regenerate the index in the same commit, and a stale index is the thing most likely to drift.
++`bin/move` moves the folder on disk and stages the whole of it, so it works the same whether the folder is committed, partly committed, or not yet tracked at all — committed files show as a rename, everything else is added. Moving a folder to the lifecycle it is already in is an error. A hand `git mv` is fine too; `bin/move` just saves typing the paths and checks the lifecycle name.
+ 
+-Neither validates or edits anything inside a folder — the path is the only thing that carries state. The one thing anything here reads from inside a folder is the single heading the index needs for a title.
+-
+-`bin/move` is strictly a `git mv`, so it refuses a folder git does not track yet and points you at `bin/adopt`. Moving a folder to the lifecycle it is already in is an error, not a quiet no-op — that case is what `bin/adopt` is for.
++Neither `bin/move` nor `bin/delete` validates or edits anything inside a folder — the path is the only thing that carries state.
+ 
+ `bin/delete` removes a folder outright. Content that is already committed goes without ceremony, because history still has it — the check compares blob hashes rather than paths, so a folder you have only moved still counts as committed. Content in no commit refuses until you pass `--force`, which names every file it is about to destroy.
+ 
+-`bin/adopt`, `bin/move`, and `bin/delete` all take `--commit` to make the commit rather than leaving it staged; `bin/move` and `bin/delete` also take `--dry-run`.
+-
+-There is a seventh script, `bin/test`, which runs the test suite over `bin/lib/planning.rb`. You need it in one situation: right after applying an upgrade from the template, to confirm the scripts still work. Writing tests is template-development work and lives in [upgrades/README.md](upgrades/README.md).
++`bin/move` and `bin/delete` both take `--commit` to make the commit rather than leaving it staged, and `--dry-run` to report what they would do.
+ 
+-## Before you commit
+-
+-`bin/check` exits zero, and the commit touches exactly one feature folder unless it is a repo-wide convention change.
++`bin/check` prints warnings and never fails on them. Today it warns about a top-level document with no `#` heading in an active or proposed feature, and about a missing `CHANGELOG.md`. It exits non-zero only when a check reports an error, and none does yet.
+ 
+-Since the index records the date of the last commit touching each folder, that means re-running `bin/index` after you edit a feature and before you commit it.
++There is a fifth script, `bin/test`, which runs the test suite over `bin/lib/planning.rb`. You need it in one situation: right after applying an upgrade from the template, to confirm the scripts still work. Writing tests is template-development work and lives in [upgrades/README.md](upgrades/README.md).
+ 
+-## How the index is built
++## Before you commit
+ 
+-`INDEX.md` is generated in full from the feature tree. A feature is any directory under `features/<lifecycle>/`. For each one:
++`bin/check` runs clean or you have read its warnings, and the commit touches exactly one feature folder unless it is a repo-wide convention change.
+ 
+-- **Title** comes from the first `#` heading in `feature-specification.md`, or failing that the first top-level `.md` in the folder, with a leading `Something: ` label stripped. A folder with no heading to find shows its slug.
+-- **Updated** is the date of the last commit touching the folder, or today's date when the folder has uncommitted changes.
++## How plans are listed
+ 
+-Neither lookup requires a file to exist. A folder holding one scratch note gets an index row the same as a fully worked feature.
++`bin/toc` reads the feature tree every time it runs and prints a table of contents. Nothing is written and nothing is committed, so the listing is always current and can never conflict in a merge.
+ 
+-The title is only a starting guess, so it is yours to overwrite. **A title already in `INDEX.md` wins over the one scraped from the folder**, which means a bad heading can be corrected in place and it sticks — through a `bin/move` as well, because rows are matched on slug as well as path. Delete a row to derive it from the folder again. That is the whole reason the file is worth having: plan folders are messy, and their headings are often written for a different audience than the index.
++- **Scope.** With no arguments it shows `active` and `proposed` — the work in flight. `--shipped` and `--abandoned` show those lifecycles instead, alone or together. `--all` shows all four. Finished plans pile up with every feature a team ships, and keeping them out of the default view is the reason the lifecycle folders exist.
++- **Features** are listed by slug, alphabetically within each lifecycle. The slug is a feature's only identifier; no title is derived for the feature as a whole.
++- **Documents** are the `.md` files directly inside a feature folder, listed alphabetically by filename. Anything in a subfolder, such as `artifacts/`, is not listed. A folder with no top-level documents shows `_Empty._` or `_No top-level documents._`, so nothing in the tree is invisible.
++- **A document's title is its first `#` heading**, exactly as written. Headings inside fenced code blocks are skipped. A document with no heading shows the first 125 characters of its text instead, and `bin/check` warns about it.
++- **Each document's date** is the last commit touching that file, or `uncommitted` if it has changes git has not committed. Dates are shown but never affect the order, so editing a document moves nothing.
+ 
+-Because titles are seeded from the file it is comparing against, `bin/check` cannot fail on the title column. It fails when a feature folder is missing from the index or indexed but gone from disk, and when the date has drifted. That is the drift it exists to catch.
++To change how a document appears, change its heading. There is nowhere else to set a title.
+ 
+ ## Producing a feature folder
+ 
+@@ -103,11 +99,11 @@ Every path falls into exactly one of three categories.
+ | --- | --- | --- |
+ | **Arrives once, never updated** | `upgrades/` | copied in when the repo was created. It is history from before this repo existed, and no upgrade adds to it |
+ | **Upgraded by patches** | `bin/`, `test/`, `AGENTS.md`, `INSTRUCTIONS.md`, `CLAUDE.md`, `VERSION`, `CHANGELOG.md` | the template owns these and may rewrite them in any release. Edit one and your next upgrade conflicts |
+-| **Yours** | `README.md`, `features/`, `INDEX.md` | no upgrade will ever touch them |
++| **Yours** | `README.md`, `features/` | no upgrade will ever touch them |
+ 
+ `README.md` is yours outright. The template seeded it once, when this repo was created, and will not write to it again.
+ 
+-`INDEX.md` is generated rather than written, but it belongs to you: `bin/index` derives it from your feature folders and supplies no content of its own.
++A repo created before v3 may still have an `INDEX.md`, the generated index that `bin/toc` replaced. It is yours like any other file you created: nothing reads or writes it any more, and you can delete it whenever you like.
+ 
+ `CLAUDE.md` is an import manifest, not a place for your own instructions — an upgrade that adds a top-level document rewrites it. `AGENTS.md` is template-owned for the same reason. If your team needs agent instructions of its own, put them in a file you own and add a line to `README.md` pointing at it; anything you write into the two template-owned files will be overwritten by an upgrade.
+ 
+@@ -125,8 +121,8 @@ The feature in `features/proposed/` is a placeholder, and running it through its
+ # remember where you started, so the reset at the end is exact
+ START=$(git rev-parse HEAD)
+ 
+-# nothing to do yet: the index already matches the tree
+-bin/check
++# what is in flight right now
++bin/toc
+ 
+ # the work got approved — staged, not committed, so look at it first
+ bin/move static-site-https active
+@@ -135,14 +131,15 @@ git commit -m "Move static-site-https to active"
+ 
+ # the rest finish on their own
+ bin/move static-site-https shipped --commit
++bin/toc --shipped
+ bin/delete static-site-https --commit
+ 
+ # put everything back
+ git reset --hard $START && git clean -fd
+ ```
+ 
+-The first step is left uncommitted on purpose. That these commands *stage* rather than commit is the one genuinely surprising thing about them — the folder move and the regenerated `INDEX.md` sit in the index together, and the script prints the `git commit` line that would finish it. Every later step passes `--commit` so the index is empty between steps; without that, each `bin/move` warns that it is about to sweep up the previous one's leftovers.
++The first move is left uncommitted on purpose. That these commands *stage* rather than commit is the one genuinely surprising thing about them, and the script prints the `git commit` line that would finish it. Every later step passes `--commit` so nothing is left staged between steps; without that, each `bin/move` warns that it is about to sweep up the previous one's leftovers.
+ 
+-Use `git reset --hard`, not `git checkout .`, to put things back. `git checkout .` restores the working tree *from the index*, and the index is exactly where `git mv` already recorded the move — so it faithfully reproduces the thing you are trying to undo. `git clean -fd` then clears untracked leftovers, like an `INDEX.md` generated before it was ever committed.
++Use `git reset --hard`, not `git checkout .`, to put things back. `git checkout .` restores the working tree *from the staging area*, and the staging area is exactly where the move was already recorded — so it faithfully reproduces the thing you are trying to undo. `git clean -fd` then clears untracked leftovers.
+ 
+ One caution on that last line: `git clean -fd` removes **every** untracked file in the repo, not only what the tour created. If you have scratch work in progress, run `git clean -nd` first to see what would go.
+diff --git a/VERSION b/VERSION
+index 0cfbf08..00750ed 100644
+--- a/VERSION
++++ b/VERSION
+@@ -1 +1 @@
+-2
++3
+diff --git a/bin/adopt b/bin/adopt
+deleted file mode 100755
+index 72e14cf..0000000
+--- a/bin/adopt
++++ /dev/null
+@@ -1,123 +0,0 @@
+-#!/usr/bin/env ruby
+-# frozen_string_literal: true
+-
+-# Bring a feature under management: git-add it, regenerate the index, stage both.
+-#
+-# Two ways in, decided by whether the argument names an existing path:
+-#
+-#   bin/adopt <slug>          a folder already sitting in features/<lifecycle>/,
+-#                             adopted wherever it was dumped — the path is the
+-#                             state, so no lifecycle is asked for
+-#   bin/adopt <path> [slug]   a folder or file from anywhere else, moved into
+-#                             features/proposed/<slug>/ first
+-
+-# This repo pins its Ruby in .ruby-version; the library uses 3.x syntax, so
+-# fail with a sentence rather than a parse dump when an older Ruby is in PATH.
+-if RUBY_VERSION < "3.0"
+-  abort "bin/adopt: needs Ruby 3.0+, found #{RUBY_VERSION}. " \
+-        "Run it from the repo root so .ruby-version applies."
+-end
+-
+-require_relative "lib/planning"
+-require "fileutils"
+-
+-USAGE = <<~TEXT
+-  usage: bin/adopt <slug> [--commit]
+-         bin/adopt <path> [slug] [--commit]
+-
+-    <slug>   a folder already under features/<lifecycle>/, adopted in place
+-    <path>   a folder or file from anywhere, moved into features/proposed/<slug>/
+-             (slug defaults to the path's own name)
+-    --commit create the commit as well as staging it
+-TEXT
+-
+-do_commit = false
+-positional = []
+-
+-ARGV.each do |arg|
+-  case arg
+-  when "--commit" then do_commit = true
+-  when "--help", "-h" then puts USAGE; exit 0
+-  when /\A-/ then abort "bin/adopt: unknown flag #{arg.inspect}\n\n#{USAGE}"
+-  else positional << arg
+-  end
+-end
+-
+-abort USAGE if positional.empty? || positional.length > 2
+-
+-def git(*args, capture: false)
+-  if capture
+-    out = IO.popen(["git", "-C", Planning::ROOT, *args], err: File::NULL, &:read)
+-    [out, $?.success?]
+-  else
+-    system("git", "-C", Planning::ROOT, *args) || abort("bin/adopt: git #{args.join(" ")} failed")
+-  end
+-end
+-
+-_, in_repo = git("rev-parse", "--git-dir", capture: true)
+-abort "bin/adopt: #{Planning::ROOT} is not a git repository" unless in_repo
+-
+-source, given_slug = positional
+-
+-# A path that exists means import; anything else is read as a slug already in
+-# the tree. Which branch ran is always printed, so the guess is never silent.
+-if File.exist?(source)
+-  slug = (given_slug || File.basename(source, ".*")).strip
+-  abort "bin/adopt: #{slug.inspect} is not usable as a folder name" if slug.empty? || slug.include?("/")
+-
+-  rel_dir = File.join("features", "proposed", slug)
+-  destination = File.join(Planning::ROOT, rel_dir)
+-  abort "bin/adopt: #{rel_dir}/ already exists" if File.exist?(destination)
+-
+-  puts "importing #{source} → #{rel_dir}/"
+-
+-  tracked, = git("ls-files", "--", source, capture: true)
+-  if File.directory?(source)
+-    if tracked.to_s.strip.empty?
+-      FileUtils.mkdir_p(File.dirname(destination))
+-      FileUtils.mv(source, destination)
+-    else
+-      git("mv", source, rel_dir)
+-    end
+-  else
+-    FileUtils.mkdir_p(destination)
+-    moved = File.join(rel_dir, File.basename(source))
+-    tracked.to_s.strip.empty? ? FileUtils.mv(source, File.join(destination, File.basename(source))) : git("mv", source, moved)
+-  end
+-else
+-  abort "bin/adopt: #{source.inspect} is neither a path nor a slug under features/*/" if source.include?("/")
+-
+-  matches = Planning::Feature.find(source)
+-  case matches.length
+-  when 0
+-    abort "bin/adopt: no path or feature folder named #{source.inspect}"
+-  when 1
+-    # the ordinary case
+-  else
+-    abort "bin/adopt: #{source.inspect} exists in more than one lifecycle: " \
+-          "#{matches.map(&:rel_dir).join(", ")}. Resolve by hand."
+-  end
+-
+-  slug = source
+-  rel_dir = matches.first.rel_dir
+-  puts "adopting #{rel_dir}/ where it sits"
+-end
+-
+-already, = git("ls-files", "--", rel_dir, capture: true)
+-puts "note: already tracked; this only refreshes the index" unless already.to_s.strip.empty?
+-
+-git("add", "--", rel_dir)
+-
+-File.write(Planning::Index.index_path, Planning::Index.render.text)
+-puts "regenerated INDEX.md"
+-git("add", "--", "INDEX.md")
+-
+-subject = "Adopt #{slug}"
+-if do_commit
+-  git("commit", "-m", subject)
+-  puts "committed: #{subject}"
+-else
+-  puts
+-  puts "Staged as one commit's worth of changes. To finish:"
+-  puts "  git commit -m #{subject.inspect}"
+-end
+diff --git a/bin/check b/bin/check
+index abb2843..53ba9a0 100755
+--- a/bin/check
++++ b/bin/check
+@@ -1,8 +1,8 @@
+ #!/usr/bin/env ruby
+ # frozen_string_literal: true
+ 
+-# Verify INDEX.md still matches the feature tree. That is the
+-# only thing this repo asserts — nothing inside a feature folder is validated.
++# Run the repo-level checks. Warnings are printed and never fail the run; a
++# check that reports a failure exits 1. Nothing is written.
+ 
+ # This repo pins its Ruby in .ruby-version; the library uses 3.x syntax, so
+ # fail with a sentence rather than a parse dump when an older Ruby is in PATH.
+@@ -11,14 +11,37 @@ if RUBY_VERSION < "3.0"
+         "Run it from the repo root so .ruby-version applies."
+ end
+ 
++require_relative "lib/planning"
++
+ if ARGV.include?("--help") || ARGV.include?("-h")
+   puts <<~TEXT
+     usage: bin/check
+ 
+-    Exits 0 when INDEX.md matches the feature tree, 1 when it is missing or
+-    stale. Run it before committing.
++    Runs the repo-level checks and prints what they find. Today every check
++    is a warning, so this always exits 0:
++
++      - a top-level document in an active or proposed feature folder with
++        no `# heading` (bin/toc has to show a snippet of it instead)
++      - CHANGELOG.md missing from the repo root
++
++    Exits 1 only when a check reports a failure.
+   TEXT
+   exit 0
+ end
+ 
+-exec(File.join(__dir__, "index"), "--check")
++abort "bin/check: unknown argument #{ARGV.first.inspect} (try --help)" unless ARGV.empty?
++
++findings = Planning::Check.run
++
++findings.each { |finding| warn "#{finding.failure? ? "error" : "warning"}: #{finding.message}" }
++
++failures = findings.count(&:failure?)
++warnings = findings.length - failures
++
++if findings.empty?
++  puts "bin/check: ok."
++else
++  puts "bin/check: #{failures} error#{"s" unless failures == 1}, #{warnings} warning#{"s" unless warnings == 1}."
++end
++
++exit(failures.zero? ? 0 : 1)
+diff --git a/bin/delete b/bin/delete
+index 1942bc4..53e6f60 100755
+--- a/bin/delete
++++ b/bin/delete
+@@ -1,8 +1,7 @@
+ #!/usr/bin/env ruby
+ # frozen_string_literal: true
+ 
+-# Delete a feature folder, regenerate the index, and stage both as one commit's
+-# worth of change.
++# Delete a feature folder and stage the deletion.
+ #
+ # A folder whose content is already committed can be recovered from history, so
+ # it is removed without ceremony. Content in no commit cannot be recovered, so
+@@ -114,10 +113,6 @@ end
+ FileUtils.rm_rf(feature.dir) if File.exist?(feature.dir)
+ puts "removed #{feature.rel_dir}/"
+ 
+-File.write(Planning::Index.index_path, Planning::Index.render.text)
+-puts "regenerated INDEX.md"
+-git("add", "--", "INDEX.md")
+-
+ subject = "Delete #{slug}"
+ if do_commit
+   git("commit", "-m", subject)
+diff --git a/bin/index b/bin/index
+deleted file mode 100755
+index 39b644c..0000000
+--- a/bin/index
++++ /dev/null
+@@ -1,76 +0,0 @@
+-#!/usr/bin/env ruby
+-# frozen_string_literal: true
+-
+-# Regenerate INDEX.md from the feature tree. The whole file is generated.
+-# Lifecycle comes from the path segment. Nothing else is read from the folder.
+-
+-# This repo pins its Ruby in .ruby-version; the library uses 3.x syntax, so
+-# fail with a sentence rather than a parse dump when an older Ruby is in PATH.
+-if RUBY_VERSION < "3.0"
+-  abort "bin/index: needs Ruby 3.0+, found #{RUBY_VERSION}. " \
+-        "Run it from the repo root so .ruby-version applies."
+-end
+-
+-require_relative "lib/planning"
+-
+-if ARGV.include?("--help") || ARGV.include?("-h")
+-  puts <<~TEXT
+-    usage: bin/index [--check]
+-
+-      (no args)  write INDEX.md from the feature tree
+-      --check    exit 1 if INDEX.md is missing or would change; write nothing
+-  TEXT
+-  exit 0
+-end
+-
+-mode = :write
+-ARGV.each do |arg|
+-  case arg
+-  when "--check" then mode = :check
+-  else abort "bin/index: unknown argument #{arg.inspect} (try --help)"
+-  end
+-end
+-
+-begin
+-  updated = Planning::Index.render
+-rescue => e
+-  abort "bin/index: #{e.message}"
+-end
+-
+-path = Planning::Index.index_path
+-exists = File.exist?(path)
+-current = Planning::Index.current
+-
+-if exists && current == updated.text
+-  puts "bin/index: INDEX.md is up to date."
+-  exit 0
+-end
+-
+-if mode == :check
+-  # A repo that has only just adopted this tooling has no INDEX.md at all.
+-  # That is a different message from a stale one, and not a stack trace.
+-  unless exists
+-    warn "bin/index: INDEX.md is missing; run bin/index"
+-    exit 1
+-  end
+-
+-  have = current.lines
+-  want = updated.text.lines
+-  at = (0...[have.length, want.length].max).find { |i| have[i] != want[i] }
+-  warn "bin/index: INDEX.md is out of date (first difference at line #{at.to_i + 1}); run bin/index"
+-  warn "  have: #{have[at].to_s.chomp.inspect}"
+-  warn "  want: #{want[at].to_s.chomp.inspect}"
+-  exit 1
+-end
+-
+-File.write(path, updated.text)
+-puts "bin/index: #{exists ? "rewrote" : "created"} INDEX.md."
+-
+-# Preserving a hand-edited title is invisible in the diff when it works, and
+-# indistinguishable from losing it when it does not. So say which happened.
+-unless updated.kept.empty?
+-  puts "  kept #{updated.kept.length} title#{"s" unless updated.kept.length == 1} already in the index"
+-end
+-unless updated.derived.empty?
+-  puts "  derived #{updated.derived.length} from the folder: #{updated.derived.join(", ")}"
+-end
+diff --git a/bin/lib/planning.rb b/bin/lib/planning.rb
+index 2733f06..a8137ed 100644
+--- a/bin/lib/planning.rb
++++ b/bin/lib/planning.rb
+@@ -1,15 +1,24 @@
+ # frozen_string_literal: true
+ 
+-# Shared support for bin/adopt, bin/move, bin/index and bin/check.
+-# Stdlib only. See AGENTS.md for the (very short) contract these assume.
++# Shared support for bin/toc, bin/move, bin/delete and bin/check.
++# Stdlib only. See INSTRUCTIONS.md for the (very short) contract these assume.
+ 
+-require "date"
++require "set"
+ 
+ module Planning
+   ROOT = File.expand_path("../..", __dir__)
+ 
+   LIFECYCLES = %w[active proposed shipped abandoned].freeze
+ 
++  # What bin/toc shows with no arguments: the work in flight. Shipped and
++  # abandoned plans accumulate without bound, and keeping them out of the
++  # default view is the reason the lifecycle folders exist.
++  DEFAULT_SCOPE = %w[active proposed].freeze
++
++  # Case-insensitive, with the exact string breaking ties, so the order never
++  # depends on the filesystem and two names never compare equal.
++  def self.sort_key(name) = [name.downcase, name]
++
+   # A feature is a directory under features/<lifecycle>/. Nothing about its
+   # contents is required, so every lookup below has to degrade to something.
+   class Feature
+@@ -20,8 +29,9 @@ module Planning
+         Dir.glob(File.join(root, "features", lifecycle, "*"))
+           .select { |path| File.directory?(path) }
+           .reject { |path| File.basename(path).start_with?(".") }
+-          .sort
+-          .map { |path| new(lifecycle, File.basename(path), root) }
++          .map { |path| File.basename(path) }
++          .sort_by { |slug| Planning.sort_key(slug) }
++          .map { |slug| new(lifecycle, slug, root) }
+       }
+     end
+ 
+@@ -38,141 +48,239 @@ module Planning
+     def dir = File.join(@root, "features", @lifecycle, @slug)
+     def rel_dir = File.join("features", @lifecycle, @slug)
+ 
+-    # The first `# heading` in the folder, preferring the conventional spec
+-    # filename, with a "Feature Specification: " style label stripped. Falls
+-    # back to the slug, which is always there.
++    # The markdown files directly inside the folder, alphabetically. Anything in
++    # a subfolder is deliberately not a document as far as bin/toc is concerned.
++    def documents
++      @documents ||= Dir.glob(File.join(dir, "*.md"))
++        .select { |path| File.file?(path) }
++        .map { |path| File.basename(path) }
++        .sort_by { |name| Planning.sort_key(name) }
++        .map { |name| Document.new(self, name) }
++    end
++
++    # Nothing in the folder at all. Dotfiles do not count, so a folder holding
++    # only a .gitkeep or a .DS_Store is still empty.
++    def empty?
++      Dir.children(dir).none? { |name| !name.start_with?(".") }
++    end
++  end
++
++  # One top-level markdown file in a feature folder.
++  class Document
++    SNIPPET_LENGTH = 125
++
++    attr_reader :feature, :name
++
++    def initialize(feature, name)
++      @feature = feature
++      @name = name
++    end
++
++    def path = File.join(@feature.dir, @name)
++    def rel_path = File.join(@feature.rel_dir, @name)
++
++    # The first `# heading` outside a fenced code block, or nil.
++    def heading
++      return @heading if defined?(@heading)
++      @heading = Markdown.first_heading(text)
++    end
++
++    # The heading, or failing that the opening of the file on one line, or
++    # failing that the file's name — so every document has something to show.
+     def title
+-      @title ||= heading_from_markdown || @slug
++      heading || snippet || @name
+     end
+ 
+-    # The last commit that touched the folder — or today, when the folder has
+-    # uncommitted changes. Without the second half, `bin/move` would write an
+-    # index that goes stale the moment it commits the move it just staged.
+-    def updated
+-      @updated ||= dirty? ? Date.today : (last_commit_date || Date.today)
++    def snippet
++      flat = text.gsub(/\s+/, " ").strip
++      flat.empty? ? nil : flat[0, SNIPPET_LENGTH].rstrip
+     end
+ 
+     private
+ 
+-    def markdown_files
+-      top = Dir.glob(File.join(dir, "*.md")).sort
+-      preferred = top.find { |path| File.basename(path) == "feature-specification.md" }
+-      preferred ? [preferred] + (top - [preferred]) : top
++    def text
++      @text ||= File.read(path, encoding: "UTF-8").scrub
+     end
++  end
++
++  module Markdown
++    HEADING_RE = /\A\#\s+(.+?)\s*\#*\s*\z/
++    FENCE_RE = /\A {0,3}(`{3,}|~{3,})/
+ 
+-    def heading_from_markdown
+-      markdown_files.each do |path|
+-        heading = File.foreach(path, encoding: "UTF-8")
+-          .lazy
+-          .filter_map { |line| line[/\A\#\s+(.+?)\s*\#*\s*\z/, 1] }
+-          .first
+-        next unless heading
+-        return heading.sub(/\A[A-Z][A-Za-z ]{2,40}:\s+/, "").strip
++    module_function
++
++    # A line opening with ``` or ~~~ starts a fence, and only a run of the same
++    # character at least as long closes it. A heading-shaped line inside one is
++    # a shell comment or an example, not a title.
++    def first_heading(text)
++      fence = nil
++      text.each_line do |line|
++        line = line.chomp
++        if (match = FENCE_RE.match(line))
++          marker = match[1]
++          if fence.nil?
++            fence = marker
++          elsif marker[0] == fence[0] && marker.length >= fence.length && line.strip == marker
++            fence = nil
++          end
++          next
++        end
++        next if fence
++        heading = line[HEADING_RE, 1]
++        return heading.strip if heading
+       end
+       nil
+     end
++  end
++
++  # Last-commit dates for documents, read in one `git log` pass per lifecycle
++  # rather than one call per file. A path with uncommitted changes, or with no
++  # commit at all, reads as "uncommitted".
++  class Dates
++    UNCOMMITTED = "uncommitted"
++
++    def initialize(root = ROOT)
++      @root = root
++      @committed = {}
++      @dirty = nil
++    end
++
++    def for(document)
++      dirty.include?(document.rel_path) ? UNCOMMITTED : committed(document.feature.lifecycle).fetch(document.rel_path, UNCOMMITTED)
++    end
++
++    private
+ 
+     def git(*args)
+-      out = IO.popen(["git", "-C", @root, *args], err: File::NULL, &:read)
+-      $?.success? ? out : nil
++      out = IO.popen(["git", "-C", @root, "-c", "core.quotePath=false", *args], err: File::NULL, &:read)
++      $?.success? ? out : ""
+     end
+ 
+-    def dirty?
+-      status = git("status", "--porcelain", "--", rel_dir)
+-      !status.to_s.strip.empty?
++    # Newest commit first, so the first time a path appears is its last change.
++    def committed(lifecycle)
++      @committed[lifecycle] ||= begin
++        dates = {}
++        current = nil
++        git("log", "--format=\x01%as", "--name-only", "--", File.join("features", lifecycle)).each_line do |line|
++          line = line.chomp
++          if line.start_with?("\x01")
++            current = line.delete_prefix("\x01")
++          elsif !line.empty? && current
++            dates[line] ||= current
++          end
++        end
++        dates
++      end
+     end
+ 
+-    def last_commit_date
+-      stamp = git("log", "-1", "--format=%as", "--", rel_dir).to_s.strip
+-      stamp.empty? ? nil : (Date.parse(stamp) rescue nil)
++    def dirty
++      @dirty ||= git("status", "--porcelain", "--untracked-files=all", "--", "features").lines.filter_map { |line|
++        path = line.chomp[3..]
++        path&.split(" -> ")&.last
++      }.to_set
+     end
+   end
+ 
+-  # Renders INDEX.md, which is generated in full. README.md and INSTRUCTIONS.md
+-  # are written by hand — one by the repo that adopted this template, one by the
+-  # template itself — and nothing here touches either.
+-  module Index
+-    PREAMBLE = <<~MARKDOWN
+-      # Feature index
++  # The table of contents bin/toc prints: lifecycle, then feature by slug, then
++  # each top-level document by its heading, with its path and date beneath.
++  module Toc
++    USAGE = <<~TEXT
++      usage: bin/toc [--shipped] [--abandoned] [--all]
+ 
+-      Generated by `bin/index` — every row is a folder under `features/`, filed
+-      under the lifecycle whose directory it sits in.
+-    MARKDOWN
++      Lists every plan in flight: each feature folder under features/active/ and
++      features/proposed/, by slug, with each of its top-level markdown documents
++      by its first `# heading`, its path, and the date of its last commit.
+ 
+-    # A row as bin/index writes it: | [Title](features/<lifecycle>/<slug>/) | date |
+-    ROW_RE = %r{^\|\s*\[(?<title>.+)\]\((?<path>features/[^)]+?)/?\)\s*\|}
++        (no flags)   active and proposed only — the default, and what to read
++                     first when orienting
++        --shipped    shipped only
++        --abandoned  abandoned only
++        --all        every lifecycle
+ 
+-    # What render produced, and where each title came from. bin/index reports the
+-    # provenance; every other caller only wants the text.
+-    Result = Struct.new(:text, :kept, :derived)
++      --shipped and --abandoned can be used alone or together; either one
++      replaces the default rather than adding to it. --all overrides both.
++    TEXT
+ 
+     module_function
+ 
+-    def index_path(root = ROOT) = File.join(root, "INDEX.md")
+-
+-    # INDEX.md as it stands, or "" when it does not exist yet. A missing file is
+-    # an ordinary state, not an error: a fresh clone has not generated one, and
+-    # neither has a repo that just adopted this tooling.
+-    def current(root = ROOT)
+-      path = index_path(root)
+-      File.exist?(path) ? File.read(path, encoding: "UTF-8") : ""
+-    end
+-
+-    # Titles already present in INDEX.md, keyed by rel_dir *and* by slug. The
+-    # rel_dir key is exact, which keeps two folders sharing a slug apart. The
+-    # slug key is what carries a corrected title through a bin/move, where the
+-    # row's path changes but the folder is plainly the same one.
+-    #
+-    # Anything that does not parse is simply not found, so a mangled table costs
+-    # you the hand-edits it mangled and nothing else.
+-    def parse(text)
+-      text.to_s.lines.each_with_object({}) do |line, found|
+-        match = ROW_RE.match(line)
+-        next unless match
+-
+-        title = match[:title].gsub("\\|", "|").strip
+-        next if title.empty?
+-
+-        found[match[:path]] = title
+-        found[File.basename(match[:path])] ||= title
++    # Flags to lifecycles, in lifecycle order. Raises ArgumentError on anything
++    # it does not recognize, positional arguments included.
++    def scope(args)
++      chosen = []
++      all = false
++      args.each do |arg|
++        case arg
++        when "--shipped" then chosen << "shipped"
++        when "--abandoned" then chosen << "abandoned"
++        when "--all" then all = true
++        else raise ArgumentError, "unknown argument #{arg.inspect}"
++        end
+       end
++      return LIFECYCLES.dup if all
++      return DEFAULT_SCOPE.dup if chosen.empty?
++      LIFECYCLES & chosen
+     end
+ 
+-    # The index is regenerated from the tree, but the title column is free text:
+-    # a title already in the file wins over the one scraped from the folder, so
+-    # correcting a bad heading by hand sticks.
+-    def render(root = ROOT)
++    def render(lifecycles, root = ROOT, dates: Dates.new(root))
+       features = Feature.all(root)
+-      known = parse(current(root))
+-      kept = []
+-      derived = []
+-
+-      titles = features.to_h { |feature|
+-        existing = known[feature.rel_dir] || known[feature.slug]
+-        (existing ? kept : derived) << feature.slug
+-        [feature.rel_dir, existing || feature.title]
++      sections = lifecycles.map { |lifecycle|
++        section(lifecycle, features.select { |feature| feature.lifecycle == lifecycle }, dates)
+       }
++      sections.join("\n").rstrip + "\n"
++    end
++
++    def section(lifecycle, features, dates)
++      out = +"## #{lifecycle.capitalize}\n\n"
++      return out << "_None._\n" if features.empty?
++      out << features.map { |feature| entry(feature, dates) }.join("\n")
++    end
+ 
+-      tables = LIFECYCLES.map { |lifecycle|
+-        table(lifecycle, features.select { |feature| feature.lifecycle == lifecycle }, titles)
+-      }.join
++    def entry(feature, dates)
++      out = +"### #{feature.slug}\n\n"
++      if feature.documents.empty?
++        return out << (feature.empty? ? "- _Empty._\n" : "- _No top-level documents._\n")
++      end
++      feature.documents.each do |document|
++        out << "- #{document.title}\n"
++        out << "  - #{document.rel_path}\n"
++        out << "  - #{dates.for(document)}\n"
++      end
++      out
++    end
++  end
+ 
+-      Result.new("#{PREAMBLE}\n#{tables}".rstrip + "\n", kept, derived)
++  # Repo-level checks for bin/check. Each check is a method returning findings;
++  # a finding is a warning or a failure, and only failures change the exit code.
++  # Add a check by writing a method and listing it in CHECKS.
++  module Check
++    Finding = Struct.new(:level, :message) do
++      def failure? = level == :failure
+     end
+ 
+-    def table(lifecycle, features, titles = {})
+-      out = +"## #{lifecycle.capitalize}\n\n"
+-      return out << "_None._\n\n" if features.empty?
++    CHECKS = %i[documents_without_headings missing_changelog].freeze
++
++    module_function
+ 
+-      out << "| Feature | Updated |\n| --- | --- |\n"
+-      features
+-        .sort_by { |feature| [-feature.updated.jd, title_for(feature, titles).downcase] }
+-        .each { |feature| out << "| [#{escape(title_for(feature, titles))}](#{feature.rel_dir}/) | #{feature.updated} |\n" }
+-      out << "\n"
++    def run(root = ROOT)
++      CHECKS.flat_map { |check| send(check, root) }
+     end
+ 
+-    def title_for(feature, titles) = titles.fetch(feature.rel_dir, feature.title)
++    def warning(message) = Finding.new(:warning, message)
++    def failure(message) = Finding.new(:failure, message)
++
++    # Only the work in flight: a finished plan nobody will edit again would
++    # otherwise warn on every run forever.
++    def documents_without_headings(root = ROOT)
++      Feature.all(root)
++        .select { |feature| DEFAULT_SCOPE.include?(feature.lifecycle) }
++        .flat_map(&:documents)
++        .reject(&:heading)
++        .map { |document| warning("#{document.rel_path} has no `# heading`; bin/toc shows a snippet of it instead") }
++    end
+ 
+-    def escape(text) = text.to_s.gsub("|", "\\|").gsub(/\s+/, " ").strip
++    def missing_changelog(root = ROOT)
++      return [] if File.exist?(File.join(root, "CHANGELOG.md"))
++      [warning("CHANGELOG.md is missing; it ships with the template and records what each VERSION brought")]
++    end
+   end
+ end
+diff --git a/bin/move b/bin/move
+index 2f7206b..5b85edb 100755
+--- a/bin/move
++++ b/bin/move
+@@ -1,11 +1,12 @@
+ #!/usr/bin/env ruby
+ # frozen_string_literal: true
+ 
+-# Move a feature folder from one lifecycle to another, regenerate the index, and
+-# stage both as one commit's worth of change. Nothing inside the folder is read,
+-# validated, or edited — the path is the only thing that carries state.
++# Move a feature folder from one lifecycle to another and stage the move.
++# Nothing inside the folder is read, validated, or edited — the path is the
++# only thing that carries state.
+ #
+-# Strictly a git mv. A folder git does not track yet belongs to bin/adopt.
++# The folder does not need to be committed first: it is moved on disk and then
++# staged whole, so tracked files show as a rename and untracked ones are added.
+ 
+ # This repo pins its Ruby in .ruby-version; the library uses 3.x syntax, so
+ # fail with a sentence rather than a parse dump when an older Ruby is in PATH.
+@@ -15,6 +16,7 @@ if RUBY_VERSION < "3.0"
+ end
+ 
+ require_relative "lib/planning"
++require "fileutils"
+ 
+ USAGE = <<~TEXT
+   usage: bin/move <slug> <lifecycle> [--dry-run] [--commit]
+@@ -86,22 +88,18 @@ end
+ staged, = git("diff", "--cached", "--name-only", capture: true)
+ unless staged.to_s.strip.empty?
+   puts
+-  puts "note: the index already has staged changes; they will land in the same commit:"
++  puts "note: git already has staged changes; they will land in the same commit:"
+   staged.lines.each { |line| puts "  #{line.strip}" }
+ end
+ 
++# A plain move then `add -A` on both paths, rather than `git mv`, so a folder
++# with untracked or uncommitted files moves the same way as a committed one.
++# The old path only goes to `git add` when git knows it: a pathspec matching
++# nothing tracked and nothing on disk is an error.
+ tracked, = git("ls-files", "--", feature.rel_dir, capture: true)
+-if tracked.to_s.strip.empty?
+-  abort "bin/move: #{feature.rel_dir}/ has no tracked files yet. " \
+-        "Run bin/adopt #{slug} to bring it under version control first."
+-end
+-
+-git("mv", feature.rel_dir, destination)
+-
+-File.write(Planning::Index.index_path, Planning::Index.render.text)
+-puts "regenerated INDEX.md"
+-
+-git("add", "--", "features", "INDEX.md")
++FileUtils.mkdir_p(File.join(Planning::ROOT, "features", target))
++FileUtils.mv(feature.dir, File.join(Planning::ROOT, destination))
++git("add", "-A", "--", *([feature.rel_dir] unless tracked.to_s.strip.empty?), destination)
+ 
+ subject = "Move #{slug} to #{target}"
+ if do_commit
+diff --git a/bin/toc b/bin/toc
+new file mode 100755
+index 0000000..5aa10cb
+--- /dev/null
++++ b/bin/toc
+@@ -0,0 +1,27 @@
++#!/usr/bin/env ruby
++# frozen_string_literal: true
++
++# Print a table of contents for the feature tree, read live from disk. Nothing
++# is written; run it whenever you need to know what is there.
++
++# This repo pins its Ruby in .ruby-version; the library uses 3.x syntax, so
++# fail with a sentence rather than a parse dump when an older Ruby is in PATH.
++if RUBY_VERSION < "3.0"
++  abort "bin/toc: needs Ruby 3.0+, found #{RUBY_VERSION}. " \
++        "Run it from the repo root so .ruby-version applies."
++end
++
++require_relative "lib/planning"
++
++if ARGV.include?("--help") || ARGV.include?("-h")
++  puts Planning::Toc::USAGE
++  exit 0
++end
++
++begin
++  lifecycles = Planning::Toc.scope(ARGV)
++rescue ArgumentError => e
++  abort "bin/toc: #{e.message}\n\n#{Planning::Toc::USAGE}"
++end
++
++print Planning::Toc.render(lifecycles)
+diff --git a/test/check_test.rb b/test/check_test.rb
+new file mode 100644
+index 0000000..c2e7217
+--- /dev/null
++++ b/test/check_test.rb
+@@ -0,0 +1,81 @@
++# frozen_string_literal: true
++
++# Tests for Planning::Check, behind bin/check.
++
++require_relative "helper"
++
++class CheckHeadingsTest < PlanningTest
++  def messages(root) = Planning::Check.documents_without_headings(root).map(&:message)
++
++  def test_warns_for_a_document_without_a_heading
++    tmp_tree do |root|
++      feature(root, "active", "thing", "notes.md" => "Just prose.\n", "spec.md" => "# Spec\n")
++
++      found = Planning::Check.documents_without_headings(root)
++
++      assert_equal 1, found.length
++      assert_equal :warning, found.first.level
++      assert_includes found.first.message, "features/active/thing/notes.md"
++    end
++  end
++
++  def test_a_heading_inside_a_fence_does_not_count
++    tmp_tree do |root|
++      feature(root, "proposed", "thing", "notes.md" => "```\n# comment\n```\n")
++
++      assert_equal 1, messages(root).length
++    end
++  end
++
++  def test_checks_active_and_proposed_only
++    tmp_tree do |root|
++      %w[active proposed shipped abandoned].each { |lifecycle| feature(root, lifecycle, "x-#{lifecycle}", "notes.md" => "prose\n") }
++
++      found = messages(root).join("\n")
++
++      assert_includes found, "x-active"
++      assert_includes found, "x-proposed"
++      refute_includes found, "x-shipped"
++      refute_includes found, "x-abandoned"
++    end
++  end
++
++  def test_ignores_documents_in_subfolders
++    tmp_tree do |root|
++      feature(root, "active", "thing", "spec.md" => "# Spec\n", "artifacts/raw.md" => "prose\n")
++
++      assert_empty messages(root)
++    end
++  end
++end
++
++class CheckChangelogTest < PlanningTest
++  def test_warns_when_missing
++    tmp_tree do |root|
++      found = Planning::Check.missing_changelog(root)
++
++      assert_equal [:warning], found.map(&:level)
++    end
++  end
++
++  def test_quiet_when_present
++    tmp_tree do |root|
++      File.write(File.join(root, "CHANGELOG.md"), "# Changelog\n")
++
++      assert_empty Planning::Check.missing_changelog(root)
++    end
++  end
++end
++
++class CheckRunTest < PlanningTest
++  def test_collects_every_check_and_nothing_fails_today
++    tmp_tree do |root|
++      feature(root, "active", "thing", "notes.md" => "prose\n")
++
++      found = Planning::Check.run(root)
++
++      assert_equal 2, found.length
++      assert found.none?(&:failure?)
++    end
++  end
++end
+diff --git a/test/helper.rb b/test/helper.rb
+index 4ec21ff..0d60f71 100644
+--- a/test/helper.rb
++++ b/test/helper.rb
+@@ -4,14 +4,13 @@
+ #
+ # Two levels, because only one thing in the lib touches git:
+ #
+-#   tmp_tree   a plain directory tree. Everything that reads files — titles,
+-#              lookups, table rendering — needs nothing more than this.
+-#   tmp_repo   tmp_tree plus `git init`, for the four tests that exercise
+-#              Feature#updated, which shells out to `git log` and
+-#              `git status`. Nothing else should reach for it.
++#   tmp_tree   a plain directory tree. Everything that reads files — lookups,
++#              headings, the rendered table of contents — needs nothing more.
++#   tmp_repo   tmp_tree plus `git init`, for the tests that exercise
++#              Planning::Dates, which shells out to `git log` and `git status`.
+ #
+-# In a plain tmp_tree those git calls fail, Feature#updated falls through to
+-# Date.today, and that is a perfectly good fixture for anything that does not
++# In a plain tmp_tree those git calls fail and every document reads as
++# "uncommitted", which is a perfectly good fixture for anything that does not
+ # care what the date is.
+ #
+ # Stdlib only, matching the lib itself. Minitest ships with Ruby.
+@@ -19,38 +18,12 @@
+ require "minitest/autorun"
+ require "fileutils"
+ require "tmpdir"
+-require "date"
+ 
+ require_relative "../bin/lib/planning"
+ 
+ module Fixtures
+-  # A README still carrying the old generated-index markers, as a repo that has
+-  # not yet been cleaned up would have. Nothing in the lib may touch this file
+-  # any more, and one test exists to prove it.
+-  README = <<~MARKDOWN
+-    # planning
+-
+-    Intro prose that must survive.
+-
+-    <!-- BEGIN GENERATED INDEX — edited by bin/index, do not hand-edit -->
+-
+-    stale content
+-
+-    <!-- END GENERATED INDEX -->
+-
+-    Trailing prose that must survive.
+-  MARKDOWN
+-
+-  # The hand-written instructions. Like the README, nothing in the lib may read
+-  # or rewrite it; the same test covers both.
+-  INSTRUCTIONS = <<~MARKDOWN
+-    # Instructions
+-
+-    Prose that must survive untouched.
+-  MARKDOWN
+-
+-  # A fixed date for committed fixtures, well clear of Date.today so tests can
+-  # tell "last commit" and "today" apart without ambiguity.
++  # A fixed date for committed fixtures, so an assertion on a date never
++  # depends on when the suite runs.
+   COMMITTED_ON = "2020-01-02"
+ 
+   def tmp_tree
+@@ -58,8 +31,6 @@ module Fixtures
+       Planning::LIFECYCLES.each do |lifecycle|
+         FileUtils.mkdir_p(File.join(root, "features", lifecycle))
+       end
+-      File.write(File.join(root, "README.md"), README)
+-      File.write(File.join(root, "INSTRUCTIONS.md"), INSTRUCTIONS)
+       yield root
+     end
+   end
+@@ -93,14 +64,12 @@ module Fixtures
+     raise "fixture: git #{args.join(" ")} failed" unless ok
+   end
+ 
+-  # Commits everything currently in the tree at a pinned date, so the Updated
+-  # column is the same on every machine and every run.
++  # Commits everything currently in the tree at a pinned date, so dates are
++  # the same on every machine and every run.
+   def commit_all(root, message: "fixture", date: COMMITTED_ON)
+     git(root, "add", "-A")
+     git(root, "commit", "-m", message, date: date)
+   end
+-
+-  def today = Date.today.to_s
+ end
+ 
+ class PlanningTest < Minitest::Test
+diff --git a/test/planning_test.rb b/test/planning_test.rb
+index eee8640..e8629cd 100644
+--- a/test/planning_test.rb
++++ b/test/planning_test.rb
+@@ -1,6 +1,6 @@
+ # frozen_string_literal: true
+ 
+-# Tests for bin/lib/planning.rb. Most of these started as characterization of
++# Tests for feature lookup in bin/lib/planning.rb. Most of these started as characterization of
+ # behavior that predates them, so where one looks like it is pinning down
+ # something odd, that is the point — the oddity is the behavior, and a change to
+ # it should show up here as a deliberate edit rather than as a surprise.
+@@ -63,357 +63,3 @@ class FeatureLookupTest < PlanningTest
+     end
+   end
+ end
+-
+-class FeatureTitleTest < PlanningTest
+-  def title_for(files)
+-    tmp_tree do |root|
+-      feature(root, "proposed", "some-slug", files)
+-      return Planning::Feature.find("some-slug", root).first.title
+-    end
+-  end
+-
+-  def test_reads_the_first_h1_from_the_spec
+-    assert_equal "Static site HTTPS",
+-      title_for("feature-specification.md" => "# Static site HTTPS\n\nProse.\n")
+-  end
+-
+-  def test_strips_a_leading_label
+-    assert_equal "Static site HTTPS",
+-      title_for("feature-specification.md" => "# Feature Specification: Static site HTTPS\n")
+-  end
+-
+-  def test_trims_trailing_hashes
+-    assert_equal "Closing hashes",
+-      title_for("feature-specification.md" => "# Closing hashes ###\n")
+-  end
+-
+-  def test_prefers_the_spec_over_an_alphabetically_earlier_file
+-    assert_equal "From the spec", title_for(
+-      "aaa-earlier.md" => "# From the other file\n",
+-      "feature-specification.md" => "# From the spec\n"
+-    )
+-  end
+-
+-  def test_falls_back_to_any_other_top_level_markdown
+-    assert_equal "From the notes", title_for("notes.md" => "# From the notes\n")
+-  end
+-
+-  def test_ignores_headings_below_the_top_level_of_the_folder
+-    assert_equal "some-slug", title_for("artifacts/decision-log.md" => "# Buried heading\n")
+-  end
+-
+-  def test_falls_back_to_the_slug_when_no_heading_exists
+-    assert_equal "some-slug", title_for("notes.md" => "Prose with no heading at all.\n")
+-  end
+-
+-  def test_falls_back_to_the_slug_for_an_empty_folder
+-    assert_equal "some-slug", title_for({})
+-  end
+-end
+-
+-class FeatureUpdatedTest < PlanningTest
+-  def test_uses_the_last_commit_touching_the_folder
+-    tmp_repo do |root|
+-      feature(root, "active", "settled", "feature-specification.md" => "# Settled\n")
+-      commit_all(root, date: "2020-01-02")
+-
+-      assert_equal "2020-01-02", Planning::Feature.find("settled", root).first.updated.to_s
+-    end
+-  end
+-
+-  def test_reports_today_when_the_folder_has_uncommitted_changes
+-    tmp_repo do |root|
+-      dir = feature(root, "active", "churning", "feature-specification.md" => "# Churning\n")
+-      commit_all(root, date: "2020-01-02")
+-      File.write(File.join(dir, "feature-specification.md"), "# Churning\n\nEdited.\n")
+-
+-      assert_equal today, Planning::Feature.find("churning", root).first.updated.to_s
+-    end
+-  end
+-
+-  def test_reports_today_for_a_folder_in_no_commit
+-    tmp_repo do |root|
+-      feature(root, "active", "brand-new", "feature-specification.md" => "# Brand new\n")
+-
+-      assert_equal today, Planning::Feature.find("brand-new", root).first.updated.to_s
+-    end
+-  end
+-end
+-
+-class IndexEscapeTest < PlanningTest
+-  def test_escapes_pipes_so_they_cannot_break_the_table
+-    assert_equal "before \\| after", Planning::Index.escape("before | after")
+-  end
+-
+-  def test_collapses_whitespace_onto_one_line
+-    assert_equal "one two three", Planning::Index.escape("one\n  two\tthree")
+-  end
+-
+-  def test_strips_surrounding_whitespace
+-    assert_equal "trimmed", Planning::Index.escape("  trimmed  ")
+-  end
+-end
+-
+-class IndexTableTest < PlanningTest
+-  def test_renders_none_for_an_empty_lifecycle
+-    assert_equal "## Active\n\n_None._\n\n", Planning::Index.table("active", [])
+-  end
+-
+-  def test_renders_a_row_per_feature
+-    tmp_tree do |root|
+-      feature(root, "proposed", "static-site-https", "feature-specification.md" => "# Static site HTTPS\n")
+-
+-      table = Planning::Index.table("proposed", Planning::Feature.all(root))
+-
+-      assert_equal <<~MARKDOWN, table
+-        ## Proposed
+-
+-        | Feature | Updated |
+-        | --- | --- |
+-        | [Static site HTTPS](features/proposed/static-site-https/) | #{today} |
+-
+-      MARKDOWN
+-    end
+-  end
+-
+-  def test_sorts_newest_first
+-    tmp_repo do |root|
+-      feature(root, "active", "older", "feature-specification.md" => "# Older\n")
+-      commit_all(root, date: "2020-01-02")
+-      feature(root, "active", "newer", "feature-specification.md" => "# Newer\n")
+-      commit_all(root, date: "2021-06-07")
+-
+-      table = Planning::Index.table("active", Planning::Feature.all(root))
+-
+-      assert_operator table.index("Newer"), :<, table.index("Older")
+-    end
+-  end
+-
+-  def test_breaks_ties_on_title_case_insensitively
+-    tmp_tree do |root|
+-      feature(root, "active", "zebra", "feature-specification.md" => "# zebra\n")
+-      feature(root, "active", "apple", "feature-specification.md" => "# Apple\n")
+-
+-      table = Planning::Index.table("active", Planning::Feature.all(root))
+-
+-      assert_operator table.index("Apple"), :<, table.index("zebra")
+-    end
+-  end
+-end
+-
+-class IndexCurrentTest < PlanningTest
+-  def test_points_at_index_md
+-    assert_equal File.join("/somewhere", "INDEX.md"), Planning::Index.index_path("/somewhere")
+-  end
+-
+-  def test_reads_the_file_when_it_exists
+-    tmp_tree do |root|
+-      File.write(File.join(root, "INDEX.md"), "# Feature index\n")
+-
+-      assert_equal "# Feature index\n", Planning::Index.current(root)
+-    end
+-  end
+-
+-  # A repo that has only just adopted this tooling has no INDEX.md. Callers
+-  # compare against this, so it has to be a string rather than an exception.
+-  def test_returns_empty_when_the_file_is_missing
+-    tmp_tree do |root|
+-      refute_path_exists File.join(root, "INDEX.md")
+-
+-      assert_equal "", Planning::Index.current(root)
+-    end
+-  end
+-end
+-
+-class IndexRenderTest < PlanningTest
+-  def test_renders_a_whole_file_not_a_spliced_block
+-    tmp_tree do |root|
+-      rendered = Planning::Index.render(root).text
+-
+-      assert rendered.start_with?("# Feature index\n"), "expected a heading of its own"
+-      assert_equal rendered, rendered.rstrip + "\n", "expected exactly one trailing newline"
+-      refute_includes rendered, "GENERATED INDEX"
+-    end
+-  end
+-
+-  def test_renders_every_lifecycle
+-    tmp_tree do |root|
+-      feature(root, "proposed", "static-site-https", "feature-specification.md" => "# Static site HTTPS\n")
+-
+-      rendered = Planning::Index.render(root).text
+-
+-      assert_includes rendered, "| [Static site HTTPS](features/proposed/static-site-https/) | #{today} |"
+-      %w[Active Proposed Shipped Abandoned].each { |heading| assert_includes rendered, "## #{heading}" }
+-      assert_equal 3, rendered.scan("_None._").length
+-    end
+-  end
+-
+-  # README.md belongs to the repo that adopted the template, and INSTRUCTIONS.md
+-  # to the template. Both are hand-written; nothing in the lib may rewrite either.
+-  def test_leaves_the_hand_written_docs_alone
+-    tmp_tree do |root|
+-      before = %w[README.md INSTRUCTIONS.md].to_h { |f| [f, File.read(File.join(root, f))] }
+-      Planning::Index.render(root)
+-
+-      before.each { |f, text| assert_equal text, File.read(File.join(root, f)) }
+-    end
+-  end
+-end
+-
+-class IndexParseTest < PlanningTest
+-  ROW = "| [Static site HTTPS](features/proposed/static-site-https/) | 2020-01-02 |\n"
+-
+-  def test_keys_a_row_by_both_path_and_slug
+-    found = Planning::Index.parse(ROW)
+-
+-    assert_equal "Static site HTTPS", found["features/proposed/static-site-https"]
+-    assert_equal "Static site HTTPS", found["static-site-https"]
+-  end
+-
+-  def test_unescapes_a_pipe
+-    found = Planning::Index.parse("| [Before \\| after](features/active/piped/) | 2020-01-02 |\n")
+-
+-    assert_equal "Before | after", found["piped"]
+-  end
+-
+-  def test_ignores_prose_headings_and_broken_rows
+-    found = Planning::Index.parse("# Feature index\n\n## Active\n\n_None._\n\n| not a row |\n")
+-
+-    assert_empty found
+-  end
+-
+-  def test_first_lifecycle_wins_the_shared_slug_key_but_paths_stay_exact
+-    found = Planning::Index.parse(
+-      "| [From active](features/active/dupe/) | 2020-01-02 |\n" \
+-      "| [From shipped](features/shipped/dupe/) | 2020-01-02 |\n"
+-    )
+-
+-    assert_equal "From active", found["dupe"]
+-    assert_equal "From active", found["features/active/dupe"]
+-    assert_equal "From shipped", found["features/shipped/dupe"]
+-  end
+-end
+-
+-class IndexPreservesTitlesTest < PlanningTest
+-  def index!(root) = File.write(File.join(root, "INDEX.md"), Planning::Index.render(root).text)
+-
+-  def retitle!(root, from, to)
+-    path = File.join(root, "INDEX.md")
+-    File.write(path, File.read(path).sub(from, to))
+-  end
+-
+-  def test_a_hand_edited_title_survives_regeneration
+-    tmp_tree do |root|
+-      feature(root, "proposed", "static-site-https", "feature-specification.md" => "# Static site HTTPS\n")
+-      index!(root)
+-      retitle!(root, "Static site HTTPS", "Cert renewal for the marketing site")
+-
+-      result = Planning::Index.render(root)
+-
+-      assert_includes result.text, "[Cert renewal for the marketing site]"
+-      refute_includes result.text, "[Static site HTTPS]"
+-      assert_equal %w[static-site-https], result.kept
+-      assert_empty result.derived
+-    end
+-  end
+-
+-  # The row's path changes when a feature moves, so the slug key is the only
+-  # thing holding the corrected title on. This is the case most likely to
+-  # regress silently.
+-  def test_a_hand_edited_title_survives_a_lifecycle_change
+-    tmp_tree do |root|
+-      feature(root, "proposed", "static-site-https", "feature-specification.md" => "# Static site HTTPS\n")
+-      index!(root)
+-      retitle!(root, "Static site HTTPS", "Cert renewal")
+-
+-      FileUtils.mv(File.join(root, "features/proposed/static-site-https"),
+-        File.join(root, "features/active/static-site-https"))
+-      result = Planning::Index.render(root)
+-
+-      assert_includes result.text, "| [Cert renewal](features/active/static-site-https/) |"
+-      assert_equal %w[static-site-https], result.kept
+-    end
+-  end
+-
+-  def test_a_new_folder_derives_its_title_while_neighbours_stay_put
+-    tmp_tree do |root|
+-      feature(root, "proposed", "existing", "feature-specification.md" => "# Existing\n")
+-      index!(root)
+-      retitle!(root, "Existing", "Corrected by hand")
+-      feature(root, "proposed", "arrival", "feature-specification.md" => "# Arrival\n")
+-
+-      result = Planning::Index.render(root)
+-
+-      assert_includes result.text, "[Corrected by hand]"
+-      assert_includes result.text, "[Arrival]"
+-      assert_equal %w[existing], result.kept
+-      assert_equal %w[arrival], result.derived
+-    end
+-  end
+-
+-  def test_a_row_whose_folder_is_gone_is_dropped
+-    tmp_tree do |root|
+-      feature(root, "proposed", "departing", "feature-specification.md" => "# Departing\n")
+-      index!(root)
+-      FileUtils.rm_rf(File.join(root, "features/proposed/departing"))
+-
+-      result = Planning::Index.render(root)
+-
+-      refute_includes result.text, "Departing"
+-      assert_equal 4, result.text.scan("_None._").length
+-    end
+-  end
+-
+-  def test_a_mangled_table_falls_back_to_the_folder_rather_than_crashing
+-    tmp_tree do |root|
+-      feature(root, "proposed", "static-site-https", "feature-specification.md" => "# Static site HTTPS\n")
+-      File.write(File.join(root, "INDEX.md"), "# Feature index\n\nsomeone deleted the tables\n")
+-
+-      result = Planning::Index.render(root)
+-
+-      assert_includes result.text, "[Static site HTTPS]"
+-      assert_equal %w[static-site-https], result.derived
+-    end
+-  end
+-
+-  def test_a_pipe_in_a_hand_edited_title_round_trips
+-    tmp_tree do |root|
+-      feature(root, "proposed", "piped", "feature-specification.md" => "# Plain\n")
+-      index!(root)
+-      retitle!(root, "Plain", "Before \\| after")
+-
+-      result = Planning::Index.render(root)
+-
+-      assert_includes result.text, "[Before \\| after]"
+-      assert_equal %w[piped], result.kept
+-    end
+-  end
+-
+-  # Titles feed the sort, so correcting one can reorder rows. bin/check flags
+-  # that, bin/index rewrites it, and it settles. Correct, not a bug.
+-  def test_a_corrected_title_reorders_rows_within_a_date
+-    tmp_tree do |root|
+-      feature(root, "active", "alpha", "feature-specification.md" => "# Alpha\n")
+-      feature(root, "active", "beta", "feature-specification.md" => "# Beta\n")
+-      index!(root)
+-      retitle!(root, "Alpha", "Zulu")
+-
+-      text = Planning::Index.render(root).text
+-
+-      assert_operator text.index("[Beta]"), :<, text.index("[Zulu]")
+-    end
+-  end
+-
+-  # Seeding from the file it is compared against is what makes bin/check ignore
+-  # the title column without any special-casing.
+-  def test_rendering_twice_is_stable_after_a_hand_edit
+-    tmp_tree do |root|
+-      feature(root, "proposed", "static-site-https", "feature-specification.md" => "# Static site HTTPS\n")
+-      index!(root)
+-      retitle!(root, "Static site HTTPS", "Cert renewal")
+-      index!(root)
+-
+-      assert_equal File.read(File.join(root, "INDEX.md")), Planning::Index.render(root).text
+-    end
+-  end
+-end
+diff --git a/test/toc_test.rb b/test/toc_test.rb
+new file mode 100644
+index 0000000..4e64202
+--- /dev/null
++++ b/test/toc_test.rb
+@@ -0,0 +1,277 @@
++# frozen_string_literal: true
++
++# Tests for the pieces of bin/lib/planning.rb behind bin/toc: documents, their
++# headings, their dates, and the rendered table of contents.
++
++require_relative "helper"
++
++class FeatureSortTest < PlanningTest
++  def test_slugs_sort_case_insensitively
++    tmp_tree do |root|
++      %w[beta Alpha gamma].each { |slug| feature(root, "active", slug) }
++
++      assert_equal %w[Alpha beta gamma], Planning::Feature.all(root).map(&:slug)
++    end
++  end
++end
++
++class FeatureDocumentsTest < PlanningTest
++  def documents_for(files)
++    tmp_tree do |root|
++      feature(root, "active", "thing", files)
++      return Planning::Feature.find("thing", root).first.documents.map(&:name)
++    end
++  end
++
++  def test_lists_top_level_markdown_alphabetically
++    assert_equal %w[alpha.md Beta.md gamma.md],
++      documents_for("gamma.md" => "", "Beta.md" => "", "alpha.md" => "")
++  end
++
++  def test_ignores_subfolders_and_other_files
++    assert_equal %w[spec.md], documents_for(
++      "spec.md" => "# Spec\n",
++      "artifacts/decision-log.md" => "# Buried\n",
++      "deep/er/still.md" => "# Deeper\n",
++      "diagram.png" => "binary"
++    )
++  end
++
++  def test_empty_ignores_dotfiles
++    tmp_tree do |root|
++      feature(root, "active", "blank", ".gitkeep" => "")
++      feature(root, "active", "nested", "artifacts/log.md" => "# Log\n")
++
++      assert Planning::Feature.find("blank", root).first.empty?
++      refute Planning::Feature.find("nested", root).first.empty?
++    end
++  end
++end
++
++class MarkdownHeadingTest < PlanningTest
++  def heading(text) = Planning::Markdown.first_heading(text)
++
++  def test_reads_the_first_h1
++    assert_equal "First", heading("intro\n# First\n# Second\n")
++  end
++
++  def test_keeps_a_leading_label
++    assert_equal "Feature Specification: Static site HTTPS",
++      heading("# Feature Specification: Static site HTTPS\n")
++  end
++
++  def test_trims_closing_hashes
++    assert_equal "Closing hashes", heading("# Closing hashes ###\n")
++  end
++
++  def test_ignores_lower_level_headings
++    assert_nil heading("## Two\n### Three\n")
++  end
++
++  def test_ignores_a_hash_with_no_space
++    assert_nil heading("#hashtag\n")
++  end
++
++  def test_skips_backtick_fences
++    assert_equal "Real", heading("```bash\n# a shell comment\n```\n# Real\n")
++  end
++
++  def test_skips_tilde_fences
++    assert_equal "Real", heading("~~~\n# not a title\n~~~\n# Real\n")
++  end
++
++  def test_a_different_fence_character_does_not_close
++    assert_nil heading("```\n~~~\n# still inside\n")
++  end
++
++  def test_a_shorter_fence_does_not_close
++    assert_equal "After", heading("````\n```\n# inside\n````\n# After\n")
++  end
++
++  def test_an_unclosed_fence_hides_the_rest
++    assert_nil heading("```\n# inside forever\n")
++  end
++end
++
++class DocumentTitleTest < PlanningTest
++  def title_for(content, name: "notes.md")
++    tmp_tree do |root|
++      feature(root, "active", "thing", name => content)
++      return Planning::Feature.find("thing", root).first.documents.first.title
++    end
++  end
++
++  def test_uses_the_heading
++    assert_equal "Notes", title_for("# Notes\n\nProse.\n")
++  end
++
++  def test_falls_back_to_a_snippet_on_one_line
++    assert_equal "Some prose that wraps here.", title_for("Some prose\nthat wraps\n\n  here.\n")
++  end
++
++  def test_truncates_the_snippet
++    assert_equal "a" * 125, title_for("a" * 300)
++  end
++
++  def test_falls_back_to_the_filename_for_an_empty_file
++    assert_equal "empty.md", title_for("  \n\n", name: "empty.md")
++  end
++end
++
++class DatesTest < PlanningTest
++  def date_for(root, slug, name)
++    feature = Planning::Feature.find(slug, root).first
++    document = feature.documents.find { |doc| doc.name == name }
++    Planning::Dates.new(root).for(document)
++  end
++
++  def test_uses_the_last_commit_touching_each_file
++    tmp_repo do |root|
++      dir = feature(root, "active", "thing", "old.md" => "# Old\n", "new.md" => "# New\n")
++      commit_all(root, date: "2020-01-02")
++      File.write(File.join(dir, "new.md"), "# New\n\nEdited.\n")
++      commit_all(root, date: "2021-03-04")
++
++      assert_equal "2020-01-02", date_for(root, "thing", "old.md")
++      assert_equal "2021-03-04", date_for(root, "thing", "new.md")
++    end
++  end
++
++  def test_reports_uncommitted_for_a_modified_file
++    tmp_repo do |root|
++      dir = feature(root, "active", "thing", "spec.md" => "# Spec\n")
++      commit_all(root)
++      File.write(File.join(dir, "spec.md"), "# Spec\n\nEdited.\n")
++
++      assert_equal "uncommitted", date_for(root, "thing", "spec.md")
++    end
++  end
++
++  def test_reports_uncommitted_for_a_file_in_no_commit
++    tmp_repo do |root|
++      feature(root, "active", "thing", "spec.md" => "# Spec\n")
++
++      assert_equal "uncommitted", date_for(root, "thing", "spec.md")
++    end
++  end
++
++  def test_reports_uncommitted_for_a_staged_move
++    tmp_repo do |root|
++      feature(root, "proposed", "thing", "spec.md" => "# Spec\n")
++      commit_all(root)
++      git(root, "mv", "features/proposed/thing", "features/active/thing")
++
++      assert_equal "uncommitted", date_for(root, "thing", "spec.md")
++    end
++  end
++
++  def test_reports_uncommitted_outside_a_repository
++    tmp_tree do |root|
++      feature(root, "active", "thing", "spec.md" => "# Spec\n")
++
++      assert_equal "uncommitted", date_for(root, "thing", "spec.md")
++    end
++  end
++end
++
++class TocScopeTest < PlanningTest
++  def scope(*args) = Planning::Toc.scope(args)
++
++  def test_defaults_to_active_and_proposed
++    assert_equal %w[active proposed], scope
++  end
++
++  def test_shipped_alone
++    assert_equal %w[shipped], scope("--shipped")
++  end
++
++  def test_abandoned_alone
++    assert_equal %w[abandoned], scope("--abandoned")
++  end
++
++  def test_shipped_and_abandoned_together_in_lifecycle_order
++    assert_equal %w[shipped abandoned], scope("--abandoned", "--shipped")
++  end
++
++  def test_all_overrides_the_others
++    assert_equal Planning::LIFECYCLES, scope("--shipped", "--all")
++  end
++
++  def test_rejects_unknown_flags_and_positional_arguments
++    assert_raises(ArgumentError) { scope("--bogus") }
++    assert_raises(ArgumentError) { scope("active") }
++  end
++end
++
++class TocRenderTest < PlanningTest
++  def test_renders_features_and_documents
++    tmp_repo do |root|
++      feature(root, "proposed", "static-site-https",
++        "feature-specification.md" => "# Feature Specification: Static site HTTPS\n",
++        "feature-implementation-plan.md" => "# Implementation Plan: Static site HTTPS\n")
++      commit_all(root, date: "2020-01-02")
++
++      assert_equal <<~MARKDOWN, Planning::Toc.render(%w[active proposed], root)
++        ## Active
++
++        _None._
++
++        ## Proposed
++
++        ### static-site-https
++
++        - Implementation Plan: Static site HTTPS
++          - features/proposed/static-site-https/feature-implementation-plan.md
++          - 2020-01-02
++        - Feature Specification: Static site HTTPS
++          - features/proposed/static-site-https/feature-specification.md
++          - 2020-01-02
++      MARKDOWN
++    end
++  end
++
++  def test_shows_only_the_selected_lifecycles
++    tmp_tree do |root|
++      feature(root, "active", "live", "a.md" => "# Live\n")
++      feature(root, "shipped", "done", "a.md" => "# Done\n")
++
++      rendered = Planning::Toc.render(%w[shipped], root)
++
++      assert_includes rendered, "### done"
++      refute_includes rendered, "live"
++      refute_includes rendered, "## Active"
++    end
++  end
++
++  def test_sorts_features_alphabetically_whatever_their_dates
++    tmp_repo do |root|
++      feature(root, "active", "zebra", "a.md" => "# Z\n")
++      commit_all(root, date: "2020-01-02")
++      feature(root, "active", "apple", "a.md" => "# A\n")
++      commit_all(root, date: "2024-01-02")
++
++      rendered = Planning::Toc.render(%w[active], root)
++
++      assert_operator rendered.index("### apple"), :<, rendered.index("### zebra")
++    end
++  end
++
++  def test_marks_empty_folders_and_folders_without_documents
++    tmp_tree do |root|
++      feature(root, "active", "blank")
++      feature(root, "active", "nested", "artifacts/log.md" => "# Log\n")
++
++      assert_equal <<~MARKDOWN, Planning::Toc.render(%w[active], root)
++        ## Active
++
++        ### blank
++
++        - _Empty._
++
++        ### nested
++
++        - _No top-level documents._
++      MARKDOWN
++    end
++  end
++end

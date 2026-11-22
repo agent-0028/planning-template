@@ -12,6 +12,7 @@ Each folder here is one step, named `v<from>-v<to>`, and holds the patch plus a 
 | --- | --- |
 | [v0-v1](v0-v1/) | Moves the generated index out of `README.md` into `INDEX.md`, makes the title column hand-editable, adds tests |
 | [v1-v2](v1-v2/) | Splits the docs into `README.md` (yours), `INSTRUCTIONS.md` and `AGENTS.md`; names which paths upgrades may rewrite; ships `CHANGELOG.md`; drops `adr/` |
+| [v2-v3](v2-v3/) | Replaces the generated `INDEX.md` with `bin/toc`, a live table of contents; removes `bin/index` and `bin/adopt`; gives `bin/check` warnings instead of an index to compare |
 
 ## What earns a release
 
@@ -28,7 +29,7 @@ Most commits to this template will never bump `VERSION` or produce a folder here
 Two habits that make that cheap:
 
 - Keep one commit per change on the working branch. The patch is generated from those commits, so a history that mixes several changes into one blob is harder to scope and review.
-- Generate the patch across managed paths only — `bin/`, `test/`, `AGENTS.md`, `INSTRUCTIONS.md`, `CLAUDE.md`, `VERSION`, `CHANGELOG.md`. Never `README.md`, `features/`, `INDEX.md`, or `upgrades/` itself.
+- Generate the patch across managed paths only — `bin/`, `test/`, `AGENTS.md`, `INSTRUCTIONS.md`, `CLAUDE.md`, `VERSION`, `CHANGELOG.md`. Never `README.md`, `features/`, `INDEX.md`, or `upgrades/` itself. When a release genuinely has to touch a file the downstream repo owns, that change ships as a separate patch the reader applies on purpose, with its own step in the upgrade README — see `v2-v3/index-deprecation.patch`.
 
 Every upgrade's README ends by telling the reader to run `bin/test`. It is the one moment someone who never touches the scripts has a reason to run them, and it confirms the patch landed intact.
 
