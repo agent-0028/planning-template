@@ -58,6 +58,15 @@ module Planning
         .map { |name| Document.new(self, name) }
     end
 
+    # The folders directly inside this one, alphabetically. bin/toc names them
+    # without looking inside, so a reader knows there is more to open.
+    def subfolders
+      @subfolders ||= Dir.children(dir)
+        .reject { |name| name.start_with?(".") }
+        .select { |name| File.directory?(File.join(dir, name)) }
+        .sort_by { |name| Planning.sort_key(name) }
+    end
+
     # Nothing in the folder at all. Dotfiles do not count, so a folder holding
     # only a .gitkeep or a .DS_Store is still empty.
     def empty?
@@ -182,14 +191,17 @@ module Planning
   end
 
   # The table of contents bin/toc prints: lifecycle, then feature by slug, then
-  # each top-level document by its heading, with its path and date beneath.
+  # each top-level document by its heading, with its path and date beneath,
+  # then each subfolder by name — one level only.
   module Toc
     USAGE = <<~TEXT
       usage: bin/toc [--shipped] [--abandoned] [--all]
 
       Lists every plan in flight: each feature folder under features/active/ and
       features/proposed/, by slug, with each of its top-level markdown documents
-      by its first `# heading`, its path, and the date of its last commit.
+      by its first `# heading`, its path, and the date of its last commit,
+      followed by the names of its subfolders. Nothing inside a subfolder is
+      listed.
 
         (no flags)   active and proposed only — the default, and what to read
                      first when orienting
@@ -237,15 +249,16 @@ module Planning
 
     def entry(feature, dates)
       out = +"### #{feature.slug}\n\n"
-      if feature.documents.empty?
-        return out << (feature.empty? ? "- _Empty._\n" : "- _No top-level documents._\n")
-      end
       feature.documents.each do |document|
         out << "- #{document.title}\n"
         out << "  - #{document.rel_path}\n"
         out << "  - #{dates.for(document)}\n"
       end
-      out
+      feature.subfolders.each { |name| out << "- #{name}/\n" }
+      return out unless feature.documents.empty? && feature.subfolders.empty?
+
+      # Neither documents nor subfolders: say why the heading has nothing under it.
+      out << (feature.empty? ? "- _Empty._\n" : "- _No markdown documents._\n")
     end
   end
 

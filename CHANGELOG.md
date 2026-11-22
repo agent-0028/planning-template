@@ -7,7 +7,7 @@ Releases of this template, newest first. A release is a change repos built from 
 **Upgrading requires manual steps.** → [upgrades/v2-v3/](upgrades/v2-v3/)
 
 - The generated `INDEX.md` is gone. It was rewritten by nearly every change to any feature, so parallel branches conflicted on it constantly. `bin/toc` replaces it: a table of contents read live from the feature tree, never written and never committed.
-- `bin/toc` lists each feature by slug and each top-level document by its first `#` heading, with its path and last-commit date, all sorted alphabetically. By default it shows `active` and `proposed` only; `--shipped` and `--abandoned` show those instead, alone or together, and `--all` shows everything.
+- `bin/toc` lists each feature by slug and each top-level document by its first `#` heading, with its path and last-commit date, then names its subfolders one level deep, all sorted alphabetically. By default it shows `active` and `proposed` only; `--shipped` and `--abandoned` show those instead, alone or together, and `--all` shows everything.
 - **Hand-edited index titles are not carried over.** A document's heading is now its only title. Existing `INDEX.md` files are left in place, marked deprecated by the upgrade; delete yours whenever you like.
 - `bin/index` and `bin/adopt` are removed. To add a feature, put the folder under `features/<lifecycle>/` and `git add` it; from elsewhere, `mv` it there first.
 - `bin/move` works on folders git does not track yet. It moves on disk and stages the whole folder. Neither it nor `bin/delete` touches `INDEX.md` any more.
