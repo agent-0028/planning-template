@@ -1,0 +1,27 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Print a table of contents for the feature tree, read live from disk. Nothing
+# is written; run it whenever you need to know what is there.
+
+# This repo pins its Ruby in .ruby-version; the library uses 3.x syntax, so
+# fail with a sentence rather than a parse dump when an older Ruby is in PATH.
+if RUBY_VERSION < "3.0"
+  abort "bin/toc: needs Ruby 3.0+, found #{RUBY_VERSION}. " \
+        "Run it from the repo root so .ruby-version applies."
+end
+
+require_relative "lib/planning"
+
+if ARGV.include?("--help") || ARGV.include?("-h")
+  puts Planning::Toc::USAGE
+  exit 0
+end
+
+begin
+  lifecycles = Planning::Toc.scope(ARGV)
+rescue ArgumentError => e
+  abort "bin/toc: #{e.message}\n\n#{Planning::Toc::USAGE}"
+end
+
+print Planning::Toc.render(lifecycles)
