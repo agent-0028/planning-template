@@ -6,7 +6,6 @@ How this repo works, for humans and agents alike. The template maintains this fi
 
 ```
 features/<lifecycle>/<slug>/   # one folder per feature
-INDEX.md                       # GENERATED, except the title column
 README.md                      # yours
 ```
 
@@ -20,68 +19,65 @@ What goes inside is up to whoever writes it. File names and sections are convent
 
 ## Workflow
 
-1. Put a feature folder in `features/proposed/<slug>/` — or in any lifecycle folder, if it already belongs somewhere else
-2. `bin/adopt <slug>` to track it and put it in the index
-3. `bin/move <slug> active` when the work is approved
-4. Build. Each PR body carries `Spec: planning@<sha> <slug>`
-5. `bin/move <slug> shipped` when it lands, or `abandoned` if it does not
+1. Put a feature folder in `features/proposed/<slug>/` — or in any lifecycle folder, if it already belongs somewhere else — and `git add` it
+2. `bin/move <slug> active` when the work is approved
+3. Build. Each PR body carries `Spec: planning@<sha> <slug>`
+4. `bin/move <slug> shipped` when it lands, or `abandoned` if it does not
 
-Step 3 is a file move, which means it can be a pull request — an approval gate for a plan, reviewed with the same machinery as code. It can equally be one person running one command. The repo makes review possible without requiring it.
+Step 2 is a file move, which means it can be a pull request — an approval gate for a plan, reviewed with the same machinery as code. It can equally be one person running one command. The repo makes review possible without requiring it.
 
 ## Commands
 
 ```bash
-# adopt a folder where it sits
-bin/adopt <slug>
+# list what is in flight: active and proposed
+bin/toc
 
-# import a folder or file from anywhere else
-bin/adopt <path> [slug]
+# list finished plans instead — either flag alone, or both together
+bin/toc --shipped
+bin/toc --abandoned
 
-# change lifecycle, regenerate the index
+# list every lifecycle
+bin/toc --all
+
+# change lifecycle
 bin/move <slug> <lifecycle>
 
 # remove a feature folder
 bin/delete <slug>
 
-# regenerate INDEX.md
-bin/index
-
-# verify INDEX.md matches the tree
+# run the repo-level checks
 bin/check
 ```
 
-`bin/adopt` gets a folder into the tree, in whichever lifecycle folder you dropped it — it never asks which, because the path already says. `bin/move` changes that lifecycle afterward, and nothing else should.
+There is no command for adding a feature. Put the folder under `features/<lifecycle>/` and `git add` it; a folder or file from elsewhere is `mv` and then `git add`. Nothing needs to be regenerated afterward, because nothing is generated.
 
-Never `git mv` a feature folder by hand. `bin/adopt` and `bin/move` regenerate the index in the same commit, and a stale index is the thing most likely to drift.
+`bin/move` moves the folder on disk and stages the whole of it, so it works the same whether the folder is committed, partly committed, or not yet tracked at all — committed files show as a rename, everything else is added. Moving a folder to the lifecycle it is already in is an error. A hand `git mv` is fine too; `bin/move` just saves typing the paths and checks the lifecycle name.
 
-Neither validates or edits anything inside a folder — the path is the only thing that carries state. The one thing anything here reads from inside a folder is the single heading the index needs for a title.
-
-`bin/move` is strictly a `git mv`, so it refuses a folder git does not track yet and points you at `bin/adopt`. Moving a folder to the lifecycle it is already in is an error, not a quiet no-op — that case is what `bin/adopt` is for.
+Neither `bin/move` nor `bin/delete` validates or edits anything inside a folder — the path is the only thing that carries state.
 
 `bin/delete` removes a folder outright. Content that is already committed goes without ceremony, because history still has it — the check compares blob hashes rather than paths, so a folder you have only moved still counts as committed. Content in no commit refuses until you pass `--force`, which names every file it is about to destroy.
 
-`bin/adopt`, `bin/move`, and `bin/delete` all take `--commit` to make the commit rather than leaving it staged; `bin/move` and `bin/delete` also take `--dry-run`.
+`bin/move` and `bin/delete` both take `--commit` to make the commit rather than leaving it staged, and `--dry-run` to report what they would do.
 
-There is a seventh script, `bin/test`, which runs the test suite over `bin/lib/planning.rb`. You need it in one situation: right after applying an upgrade from the template, to confirm the scripts still work. Writing tests is template-development work and lives in [upgrades/README.md](upgrades/README.md).
+`bin/check` prints warnings and never fails on them. Today it warns about a top-level document with no `#` heading in an active or proposed feature, and about a missing `CHANGELOG.md`. It exits non-zero only when a check reports an error, and none does yet.
+
+There is a fifth script, `bin/test`, which runs the test suite over `bin/lib/planning.rb`. You need it in one situation: right after applying an upgrade from the template, to confirm the scripts still work. Writing tests is template-development work and lives in [upgrades/README.md](upgrades/README.md).
 
 ## Before you commit
 
-`bin/check` exits zero, and the commit touches exactly one feature folder unless it is a repo-wide convention change.
+`bin/check` runs clean or you have read its warnings, and the commit touches exactly one feature folder unless it is a repo-wide convention change.
 
-Since the index records the date of the last commit touching each folder, that means re-running `bin/index` after you edit a feature and before you commit it.
+## How plans are listed
 
-## How the index is built
+`bin/toc` reads the feature tree every time it runs and prints a table of contents. Nothing is written and nothing is committed, so the listing is always current and can never conflict in a merge.
 
-`INDEX.md` is generated in full from the feature tree. A feature is any directory under `features/<lifecycle>/`. For each one:
+- **Scope.** With no arguments it shows `active` and `proposed` — the work in flight. `--shipped` and `--abandoned` show those lifecycles instead, alone or together. `--all` shows all four. Finished plans pile up with every feature a team ships, and keeping them out of the default view is the reason the lifecycle folders exist.
+- **Features** are listed by slug, alphabetically within each lifecycle. The slug is a feature's only identifier; no title is derived for the feature as a whole.
+- **Documents** are the `.md` files directly inside a feature folder, listed alphabetically by filename. Anything in a subfolder, such as `artifacts/`, is not listed. A folder with no top-level documents shows `_Empty._` or `_No top-level documents._`, so nothing in the tree is invisible.
+- **A document's title is its first `#` heading**, exactly as written. Headings inside fenced code blocks are skipped. A document with no heading shows the first 125 characters of its text instead, and `bin/check` warns about it.
+- **Each document's date** is the last commit touching that file, or `uncommitted` if it has changes git has not committed. Dates are shown but never affect the order, so editing a document moves nothing.
 
-- **Title** comes from the first `#` heading in `feature-specification.md`, or failing that the first top-level `.md` in the folder, with a leading `Something: ` label stripped. A folder with no heading to find shows its slug.
-- **Updated** is the date of the last commit touching the folder, or today's date when the folder has uncommitted changes.
-
-Neither lookup requires a file to exist. A folder holding one scratch note gets an index row the same as a fully worked feature.
-
-The title is only a starting guess, so it is yours to overwrite. **A title already in `INDEX.md` wins over the one scraped from the folder**, which means a bad heading can be corrected in place and it sticks — through a `bin/move` as well, because rows are matched on slug as well as path. Delete a row to derive it from the folder again. That is the whole reason the file is worth having: plan folders are messy, and their headings are often written for a different audience than the index.
-
-Because titles are seeded from the file it is comparing against, `bin/check` cannot fail on the title column. It fails when a feature folder is missing from the index or indexed but gone from disk, and when the date has drifted. That is the drift it exists to catch.
+To change how a document appears, change its heading. There is nowhere else to set a title.
 
 ## Producing a feature folder
 
@@ -103,11 +99,11 @@ Every path falls into exactly one of three categories.
 | --- | --- | --- |
 | **Arrives once, never updated** | `upgrades/` | copied in when the repo was created. It is history from before this repo existed, and no upgrade adds to it |
 | **Upgraded by patches** | `bin/`, `test/`, `AGENTS.md`, `INSTRUCTIONS.md`, `CLAUDE.md`, `VERSION`, `CHANGELOG.md` | the template owns these and may rewrite them in any release. Edit one and your next upgrade conflicts |
-| **Yours** | `README.md`, `features/`, `INDEX.md` | no upgrade will ever touch them |
+| **Yours** | `README.md`, `features/` | no upgrade will ever touch them |
 
 `README.md` is yours outright. The template seeded it once, when this repo was created, and will not write to it again.
 
-`INDEX.md` is generated rather than written, but it belongs to you: `bin/index` derives it from your feature folders and supplies no content of its own.
+A repo created before v3 may still have an `INDEX.md`, the generated index that `bin/toc` replaced. It is yours like any other file you created: nothing reads or writes it any more, and you can delete it whenever you like.
 
 `CLAUDE.md` is an import manifest, not a place for your own instructions — an upgrade that adds a top-level document rewrites it. `AGENTS.md` is template-owned for the same reason. If your team needs agent instructions of its own, put them in a file you own and add a line to `README.md` pointing at it; anything you write into the two template-owned files will be overwritten by an upgrade.
 
@@ -125,8 +121,8 @@ The feature in `features/proposed/` is a placeholder, and running it through its
 # remember where you started, so the reset at the end is exact
 START=$(git rev-parse HEAD)
 
-# nothing to do yet: the index already matches the tree
-bin/check
+# what is in flight right now
+bin/toc
 
 # the work got approved — staged, not committed, so look at it first
 bin/move static-site-https active
@@ -135,14 +131,15 @@ git commit -m "Move static-site-https to active"
 
 # the rest finish on their own
 bin/move static-site-https shipped --commit
+bin/toc --shipped
 bin/delete static-site-https --commit
 
 # put everything back
 git reset --hard $START && git clean -fd
 ```
 
-The first step is left uncommitted on purpose. That these commands *stage* rather than commit is the one genuinely surprising thing about them — the folder move and the regenerated `INDEX.md` sit in the index together, and the script prints the `git commit` line that would finish it. Every later step passes `--commit` so the index is empty between steps; without that, each `bin/move` warns that it is about to sweep up the previous one's leftovers.
+The first move is left uncommitted on purpose. That these commands *stage* rather than commit is the one genuinely surprising thing about them, and the script prints the `git commit` line that would finish it. Every later step passes `--commit` so nothing is left staged between steps; without that, each `bin/move` warns that it is about to sweep up the previous one's leftovers.
 
-Use `git reset --hard`, not `git checkout .`, to put things back. `git checkout .` restores the working tree *from the index*, and the index is exactly where `git mv` already recorded the move — so it faithfully reproduces the thing you are trying to undo. `git clean -fd` then clears untracked leftovers, like an `INDEX.md` generated before it was ever committed.
+Use `git reset --hard`, not `git checkout .`, to put things back. `git checkout .` restores the working tree *from the staging area*, and the staging area is exactly where the move was already recorded — so it faithfully reproduces the thing you are trying to undo. `git clean -fd` then clears untracked leftovers.
 
 One caution on that last line: `git clean -fd` removes **every** untracked file in the repo, not only what the tour created. If you have scratch work in progress, run `git clean -nd` first to see what would go.
