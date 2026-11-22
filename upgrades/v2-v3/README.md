@@ -77,7 +77,7 @@ bin/toc --all
 ## What changed
 
 - `INDEX.md` is no longer generated. `bin/toc` prints a table of contents read live from the tree, so there is no file to conflict on in a merge.
-- `bin/toc` lists features by slug and each top-level document by its first `#` heading, with its path and last-commit date, sorted alphabetically. It shows `active` and `proposed` by default; `--shipped`, `--abandoned` and `--all` widen it.
+- `bin/toc` lists features by slug and each top-level document by its first `#` heading, with its path and last-commit date, then names each subfolder one level deep, all sorted alphabetically. It shows `active` and `proposed` by default; `--shipped`, `--abandoned` and `--all` widen it.
 - `bin/index` and `bin/adopt` are gone.
 - `bin/move` moves a folder whether or not git tracks it yet, and stages all of it. `bin/move` and `bin/delete` no longer touch `INDEX.md`.
 - `bin/check` warns about top-level documents with no heading in active and proposed features, and about a missing `CHANGELOG.md`. Warnings never fail it.

@@ -25,7 +25,7 @@ index 23fc825..e9a70e3 100644
 -This is the one rule here that has no meaning for a human reader. Everything else about working in this repo applies to both, and lives in [INSTRUCTIONS.md](INSTRUCTIONS.md).
 +These are the rules here that have no meaning for a human reader. Everything else about working in this repo applies to both, and lives in [INSTRUCTIONS.md](INSTRUCTIONS.md).
 diff --git a/CHANGELOG.md b/CHANGELOG.md
-index ab667d1..cc76405 100644
+index ab667d1..7612b92 100644
 --- a/CHANGELOG.md
 +++ b/CHANGELOG.md
 @@ -2,6 +2,18 @@
@@ -37,7 +37,7 @@ index ab667d1..cc76405 100644
 +**Upgrading requires manual steps.** → [upgrades/v2-v3/](upgrades/v2-v3/)
 +
 +- The generated `INDEX.md` is gone. It was rewritten by nearly every change to any feature, so parallel branches conflicted on it constantly. `bin/toc` replaces it: a table of contents read live from the feature tree, never written and never committed.
-+- `bin/toc` lists each feature by slug and each top-level document by its first `#` heading, with its path and last-commit date, all sorted alphabetically. By default it shows `active` and `proposed` only; `--shipped` and `--abandoned` show those instead, alone or together, and `--all` shows everything.
++- `bin/toc` lists each feature by slug and each top-level document by its first `#` heading, with its path and last-commit date, then names its subfolders one level deep, all sorted alphabetically. By default it shows `active` and `proposed` only; `--shipped` and `--abandoned` show those instead, alone or together, and `--all` shows everything.
 +- **Hand-edited index titles are not carried over.** A document's heading is now its only title. Existing `INDEX.md` files are left in place, marked deprecated by the upgrade; delete yours whenever you like.
 +- `bin/index` and `bin/adopt` are removed. To add a feature, put the folder under `features/<lifecycle>/` and `git add` it; from elsewhere, `mv` it there first.
 +- `bin/move` works on folders git does not track yet. It moves on disk and stages the whole folder. Neither it nor `bin/delete` touches `INDEX.md` any more.
@@ -48,7 +48,7 @@ index ab667d1..cc76405 100644
  
  **Upgrading requires manual steps.** → [upgrades/v1-v2/](upgrades/v1-v2/)
 diff --git a/INSTRUCTIONS.md b/INSTRUCTIONS.md
-index dab672c..e44b5ab 100644
+index dab672c..fbb9d78 100644
 --- a/INSTRUCTIONS.md
 +++ b/INSTRUCTIONS.md
 @@ -6,7 +6,6 @@ How this repo works, for humans and agents alike. The template maintains this fi
@@ -150,7 +150,7 @@ index dab672c..e44b5ab 100644
 -The title is only a starting guess, so it is yours to overwrite. **A title already in `INDEX.md` wins over the one scraped from the folder**, which means a bad heading can be corrected in place and it sticks — through a `bin/move` as well, because rows are matched on slug as well as path. Delete a row to derive it from the folder again. That is the whole reason the file is worth having: plan folders are messy, and their headings are often written for a different audience than the index.
 +- **Scope.** With no arguments it shows `active` and `proposed` — the work in flight. `--shipped` and `--abandoned` show those lifecycles instead, alone or together. `--all` shows all four. Finished plans pile up with every feature a team ships, and keeping them out of the default view is the reason the lifecycle folders exist.
 +- **Features** are listed by slug, alphabetically within each lifecycle. The slug is a feature's only identifier; no title is derived for the feature as a whole.
-+- **Documents** are the `.md` files directly inside a feature folder, listed alphabetically by filename. Anything in a subfolder, such as `artifacts/`, is not listed. A folder with no top-level documents shows `_Empty._` or `_No top-level documents._`, so nothing in the tree is invisible.
++- **Documents** are the `.md` files directly inside a feature folder, listed alphabetically by filename. After the documents, each subfolder (such as `artifacts/`) is listed by name, alphabetically, so you know there is more to open — but nothing inside it is listed. A folder with neither documents nor subfolders shows `_Empty._`, or `_No markdown documents._` if it holds other files, so nothing in the tree is invisible.
 +- **A document's title is its first `#` heading**, exactly as written. Headings inside fenced code blocks are skipped. A document with no heading shows the first 125 characters of its text instead, and `bin/check` warns about it.
 +- **Each document's date** is the last commit touching that file, or `uncommitted` if it has changes git has not committed. Dates are shown but never affect the order, so editing a document moves nothing.
  
@@ -502,7 +502,7 @@ index 39b644c..0000000
 -  puts "  derived #{updated.derived.length} from the folder: #{updated.derived.join(", ")}"
 -end
 diff --git a/bin/lib/planning.rb b/bin/lib/planning.rb
-index 2733f06..a8137ed 100644
+index 2733f06..9736f57 100644
 --- a/bin/lib/planning.rb
 +++ b/bin/lib/planning.rb
 @@ -1,15 +1,24 @@
@@ -545,7 +545,7 @@ index 2733f06..a8137ed 100644
        }
      end
  
-@@ -38,141 +48,239 @@ module Planning
+@@ -38,141 +48,252 @@ module Planning
      def dir = File.join(@root, "features", @lifecycle, @slug)
      def rel_dir = File.join("features", @lifecycle, @slug)
  
@@ -560,6 +560,15 @@ index 2733f06..a8137ed 100644
 +        .map { |path| File.basename(path) }
 +        .sort_by { |name| Planning.sort_key(name) }
 +        .map { |name| Document.new(self, name) }
++    end
++
++    # The folders directly inside this one, alphabetically. bin/toc names them
++    # without looking inside, so a reader knows there is more to open.
++    def subfolders
++      @subfolders ||= Dir.children(dir)
++        .reject { |name| name.start_with?(".") }
++        .select { |name| File.directory?(File.join(dir, name)) }
++        .sort_by { |name| Planning.sort_key(name) }
 +    end
 +
 +    # Nothing in the folder at all. Dotfiles do not count, so a folder holding
@@ -654,35 +663,50 @@ index 2733f06..a8137ed 100644
        nil
      end
 +  end
-+
+ 
+-    def git(*args)
+-      out = IO.popen(["git", "-C", @root, *args], err: File::NULL, &:read)
+-      $?.success? ? out : nil
+-    end
 +  # Last-commit dates for documents, read in one `git log` pass per lifecycle
 +  # rather than one call per file. A path with uncommitted changes, or with no
 +  # commit at all, reads as "uncommitted".
 +  class Dates
 +    UNCOMMITTED = "uncommitted"
-+
-+    def initialize(root = ROOT)
-+      @root = root
-+      @committed = {}
-+      @dirty = nil
-+    end
-+
-+    def for(document)
-+      dirty.include?(document.rel_path) ? UNCOMMITTED : committed(document.feature.lifecycle).fetch(document.rel_path, UNCOMMITTED)
-+    end
-+
-+    private
- 
-     def git(*args)
--      out = IO.popen(["git", "-C", @root, *args], err: File::NULL, &:read)
--      $?.success? ? out : nil
-+      out = IO.popen(["git", "-C", @root, "-c", "core.quotePath=false", *args], err: File::NULL, &:read)
-+      $?.success? ? out : ""
-     end
  
 -    def dirty?
 -      status = git("status", "--porcelain", "--", rel_dir)
 -      !status.to_s.strip.empty?
++    def initialize(root = ROOT)
++      @root = root
++      @committed = {}
++      @dirty = nil
+     end
+ 
+-    def last_commit_date
+-      stamp = git("log", "-1", "--format=%as", "--", rel_dir).to_s.strip
+-      stamp.empty? ? nil : (Date.parse(stamp) rescue nil)
++    def for(document)
++      dirty.include?(document.rel_path) ? UNCOMMITTED : committed(document.feature.lifecycle).fetch(document.rel_path, UNCOMMITTED)
+     end
+-  end
+ 
+-  # Renders INDEX.md, which is generated in full. README.md and INSTRUCTIONS.md
+-  # are written by hand — one by the repo that adopted this template, one by the
+-  # template itself — and nothing here touches either.
+-  module Index
+-    PREAMBLE = <<~MARKDOWN
+-      # Feature index
++    private
++
++    def git(*args)
++      out = IO.popen(["git", "-C", @root, "-c", "core.quotePath=false", *args], err: File::NULL, &:read)
++      $?.success? ? out : ""
++    end
+ 
+-      Generated by `bin/index` — every row is a folder under `features/`, filed
+-      under the lifecycle whose directory it sits in.
+-    MARKDOWN
 +    # Newest commit first, so the first time a path appears is its last change.
 +    def committed(lifecycle)
 +      @committed[lifecycle] ||= begin
@@ -698,49 +722,40 @@ index 2733f06..a8137ed 100644
 +        end
 +        dates
 +      end
-     end
++    end
  
--    def last_commit_date
--      stamp = git("log", "-1", "--format=%as", "--", rel_dir).to_s.strip
--      stamp.empty? ? nil : (Date.parse(stamp) rescue nil)
+-    # A row as bin/index writes it: | [Title](features/<lifecycle>/<slug>/) | date |
+-    ROW_RE = %r{^\|\s*\[(?<title>.+)\]\((?<path>features/[^)]+?)/?\)\s*\|}
 +    def dirty
 +      @dirty ||= git("status", "--porcelain", "--untracked-files=all", "--", "features").lines.filter_map { |line|
 +        path = line.chomp[3..]
 +        path&.split(" -> ")&.last
 +      }.to_set
-     end
-   end
++    end
++  end
  
--  # Renders INDEX.md, which is generated in full. README.md and INSTRUCTIONS.md
--  # are written by hand — one by the repo that adopted this template, one by the
--  # template itself — and nothing here touches either.
--  module Index
--    PREAMBLE = <<~MARKDOWN
--      # Feature index
+-    # What render produced, and where each title came from. bin/index reports the
+-    # provenance; every other caller only wants the text.
+-    Result = Struct.new(:text, :kept, :derived)
 +  # The table of contents bin/toc prints: lifecycle, then feature by slug, then
-+  # each top-level document by its heading, with its path and date beneath.
++  # each top-level document by its heading, with its path and date beneath,
++  # then each subfolder by name — one level only.
 +  module Toc
 +    USAGE = <<~TEXT
 +      usage: bin/toc [--shipped] [--abandoned] [--all]
- 
--      Generated by `bin/index` — every row is a folder under `features/`, filed
--      under the lifecycle whose directory it sits in.
--    MARKDOWN
++
 +      Lists every plan in flight: each feature folder under features/active/ and
 +      features/proposed/, by slug, with each of its top-level markdown documents
-+      by its first `# heading`, its path, and the date of its last commit.
- 
--    # A row as bin/index writes it: | [Title](features/<lifecycle>/<slug>/) | date |
--    ROW_RE = %r{^\|\s*\[(?<title>.+)\]\((?<path>features/[^)]+?)/?\)\s*\|}
++      by its first `# heading`, its path, and the date of its last commit,
++      followed by the names of its subfolders. Nothing inside a subfolder is
++      listed.
++
 +        (no flags)   active and proposed only — the default, and what to read
 +                     first when orienting
 +        --shipped    shipped only
 +        --abandoned  abandoned only
 +        --all        every lifecycle
- 
--    # What render produced, and where each title came from. bin/index reports the
--    # provenance; every other caller only wants the text.
--    Result = Struct.new(:text, :kept, :derived)
++
 +      --shipped and --abandoned can be used alone or together; either one
 +      replaces the default rather than adding to it. --all overrides both.
 +    TEXT
@@ -811,51 +826,52 @@ index 2733f06..a8137ed 100644
        }
 +      sections.join("\n").rstrip + "\n"
 +    end
-+
+ 
+-      tables = LIFECYCLES.map { |lifecycle|
+-        table(lifecycle, features.select { |feature| feature.lifecycle == lifecycle }, titles)
+-      }.join
 +    def section(lifecycle, features, dates)
 +      out = +"## #{lifecycle.capitalize}\n\n"
 +      return out << "_None._\n" if features.empty?
 +      out << features.map { |feature| entry(feature, dates) }.join("\n")
 +    end
- 
--      tables = LIFECYCLES.map { |lifecycle|
--        table(lifecycle, features.select { |feature| feature.lifecycle == lifecycle }, titles)
--      }.join
++
 +    def entry(feature, dates)
 +      out = +"### #{feature.slug}\n\n"
-+      if feature.documents.empty?
-+        return out << (feature.empty? ? "- _Empty._\n" : "- _No top-level documents._\n")
-+      end
 +      feature.documents.each do |document|
 +        out << "- #{document.title}\n"
 +        out << "  - #{document.rel_path}\n"
 +        out << "  - #{dates.for(document)}\n"
 +      end
-+      out
-+    end
-+  end
++      feature.subfolders.each { |name| out << "- #{name}/\n" }
++      return out unless feature.documents.empty? && feature.subfolders.empty?
  
 -      Result.new("#{PREAMBLE}\n#{tables}".rstrip + "\n", kept, derived)
++      # Neither documents nor subfolders: say why the heading has nothing under it.
++      out << (feature.empty? ? "- _Empty._\n" : "- _No markdown documents._\n")
+     end
++  end
+ 
+-    def table(lifecycle, features, titles = {})
+-      out = +"## #{lifecycle.capitalize}\n\n"
+-      return out << "_None._\n\n" if features.empty?
 +  # Repo-level checks for bin/check. Each check is a method returning findings;
 +  # a finding is a warning or a failure, and only failures change the exit code.
 +  # Add a check by writing a method and listing it in CHECKS.
 +  module Check
 +    Finding = Struct.new(:level, :message) do
 +      def failure? = level == :failure
-     end
- 
--    def table(lifecycle, features, titles = {})
--      out = +"## #{lifecycle.capitalize}\n\n"
--      return out << "_None._\n\n" if features.empty?
-+    CHECKS = %i[documents_without_headings missing_changelog].freeze
-+
-+    module_function
++    end
  
 -      out << "| Feature | Updated |\n| --- | --- |\n"
 -      features
 -        .sort_by { |feature| [-feature.updated.jd, title_for(feature, titles).downcase] }
 -        .each { |feature| out << "| [#{escape(title_for(feature, titles))}](#{feature.rel_dir}/) | #{feature.updated} |\n" }
 -      out << "\n"
++    CHECKS = %i[documents_without_headings missing_changelog].freeze
++
++    module_function
++
 +    def run(root = ROOT)
 +      CHECKS.flat_map { |check| send(check, root) }
      end
@@ -1525,10 +1541,10 @@ index eee8640..e8629cd 100644
 -end
 diff --git a/test/toc_test.rb b/test/toc_test.rb
 new file mode 100644
-index 0000000..4e64202
+index 0000000..cb435df
 --- /dev/null
 +++ b/test/toc_test.rb
-@@ -0,0 +1,277 @@
+@@ -0,0 +1,297 @@
 +# frozen_string_literal: true
 +
 +# Tests for the pieces of bin/lib/planning.rb behind bin/toc: documents, their
@@ -1566,6 +1582,19 @@ index 0000000..4e64202
 +      "deep/er/still.md" => "# Deeper\n",
 +      "diagram.png" => "binary"
 +    )
++  end
++
++  def test_subfolders_one_level_alphabetically
++    tmp_tree do |root|
++      feature(root, "active", "thing",
++        "spec.md" => "# Spec\n",
++        "zeta/deep/er/x.md" => "",
++        "Artifacts/log.md" => "",
++        ".hidden/x.md" => "",
++        "notes.txt" => "")
++
++      assert_equal %w[Artifacts zeta], Planning::Feature.find("thing", root).first.subfolders
++    end
 +  end
 +
 +  def test_empty_ignores_dotfiles
@@ -1739,7 +1768,8 @@ index 0000000..4e64202
 +    tmp_repo do |root|
 +      feature(root, "proposed", "static-site-https",
 +        "feature-specification.md" => "# Feature Specification: Static site HTTPS\n",
-+        "feature-implementation-plan.md" => "# Implementation Plan: Static site HTTPS\n")
++        "feature-implementation-plan.md" => "# Implementation Plan: Static site HTTPS\n",
++        "artifacts/decision-log.md" => "# Decision log\n")
 +      commit_all(root, date: "2020-01-02")
 +
 +      assert_equal <<~MARKDOWN, Planning::Toc.render(%w[active proposed], root)
@@ -1757,6 +1787,7 @@ index 0000000..4e64202
 +        - Feature Specification: Static site HTTPS
 +          - features/proposed/static-site-https/feature-specification.md
 +          - 2020-01-02
++        - artifacts/
 +      MARKDOWN
 +    end
 +  end
@@ -1787,10 +1818,11 @@ index 0000000..4e64202
 +    end
 +  end
 +
-+  def test_marks_empty_folders_and_folders_without_documents
++  def test_marks_empty_folders_and_lists_bare_subfolders
 +    tmp_tree do |root|
 +      feature(root, "active", "blank")
 +      feature(root, "active", "nested", "artifacts/log.md" => "# Log\n")
++      feature(root, "active", "pictures", "diagram.png" => "binary")
 +
 +      assert_equal <<~MARKDOWN, Planning::Toc.render(%w[active], root)
 +        ## Active
@@ -1801,7 +1833,11 @@ index 0000000..4e64202
 +
 +        ### nested
 +
-+        - _No top-level documents._
++        - artifacts/
++
++        ### pictures
++
++        - _No markdown documents._
 +      MARKDOWN
 +    end
 +  end
