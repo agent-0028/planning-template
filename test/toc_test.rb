@@ -37,6 +37,19 @@ class FeatureDocumentsTest < PlanningTest
     )
   end
 
+  def test_subfolders_one_level_alphabetically
+    tmp_tree do |root|
+      feature(root, "active", "thing",
+        "spec.md" => "# Spec\n",
+        "zeta/deep/er/x.md" => "",
+        "Artifacts/log.md" => "",
+        ".hidden/x.md" => "",
+        "notes.txt" => "")
+
+      assert_equal %w[Artifacts zeta], Planning::Feature.find("thing", root).first.subfolders
+    end
+  end
+
   def test_empty_ignores_dotfiles
     tmp_tree do |root|
       feature(root, "active", "blank", ".gitkeep" => "")
@@ -208,7 +221,8 @@ class TocRenderTest < PlanningTest
     tmp_repo do |root|
       feature(root, "proposed", "static-site-https",
         "feature-specification.md" => "# Feature Specification: Static site HTTPS\n",
-        "feature-implementation-plan.md" => "# Implementation Plan: Static site HTTPS\n")
+        "feature-implementation-plan.md" => "# Implementation Plan: Static site HTTPS\n",
+        "artifacts/decision-log.md" => "# Decision log\n")
       commit_all(root, date: "2020-01-02")
 
       assert_equal <<~MARKDOWN, Planning::Toc.render(%w[active proposed], root)
@@ -226,6 +240,7 @@ class TocRenderTest < PlanningTest
         - Feature Specification: Static site HTTPS
           - features/proposed/static-site-https/feature-specification.md
           - 2020-01-02
+        - artifacts/
       MARKDOWN
     end
   end
@@ -256,10 +271,11 @@ class TocRenderTest < PlanningTest
     end
   end
 
-  def test_marks_empty_folders_and_folders_without_documents
+  def test_marks_empty_folders_and_lists_bare_subfolders
     tmp_tree do |root|
       feature(root, "active", "blank")
       feature(root, "active", "nested", "artifacts/log.md" => "# Log\n")
+      feature(root, "active", "pictures", "diagram.png" => "binary")
 
       assert_equal <<~MARKDOWN, Planning::Toc.render(%w[active], root)
         ## Active
@@ -270,7 +286,11 @@ class TocRenderTest < PlanningTest
 
         ### nested
 
-        - _No top-level documents._
+        - artifacts/
+
+        ### pictures
+
+        - _No markdown documents._
       MARKDOWN
     end
   end

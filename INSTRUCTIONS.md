@@ -73,7 +73,7 @@ There is a fifth script, `bin/test`, which runs the test suite over `bin/lib/pla
 
 - **Scope.** With no arguments it shows `active` and `proposed` — the work in flight. `--shipped` and `--abandoned` show those lifecycles instead, alone or together. `--all` shows all four. Finished plans pile up with every feature a team ships, and keeping them out of the default view is the reason the lifecycle folders exist.
 - **Features** are listed by slug, alphabetically within each lifecycle. The slug is a feature's only identifier; no title is derived for the feature as a whole.
-- **Documents** are the `.md` files directly inside a feature folder, listed alphabetically by filename. Anything in a subfolder, such as `artifacts/`, is not listed. A folder with no top-level documents shows `_Empty._` or `_No top-level documents._`, so nothing in the tree is invisible.
+- **Documents** are the `.md` files directly inside a feature folder, listed alphabetically by filename. After the documents, each subfolder (such as `artifacts/`) is listed by name, alphabetically, so you know there is more to open — but nothing inside it is listed. A folder with neither documents nor subfolders shows `_Empty._`, or `_No markdown documents._` if it holds other files, so nothing in the tree is invisible.
 - **A document's title is its first `#` heading**, exactly as written. Headings inside fenced code blocks are skipped. A document with no heading shows the first 125 characters of its text instead, and `bin/check` warns about it.
 - **Each document's date** is the last commit touching that file, or `uncommitted` if it has changes git has not committed. Dates are shown but never affect the order, so editing a document moves nothing.
 
