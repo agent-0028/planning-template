@@ -1,9 +1,9 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Move a feature folder from one lifecycle to another, regenerate the index, and
-# stage both as one commit's worth of change. Nothing inside the folder is read,
-# validated, or edited — the path is the only thing that carries state.
+# Move a feature folder from one lifecycle to another and stage the move.
+# Nothing inside the folder is read, validated, or edited — the path is the
+# only thing that carries state.
 #
 # The folder does not need to be committed first: it is moved on disk and then
 # staged whole, so tracked files show as a rename and untracked ones are added.
@@ -88,7 +88,7 @@ end
 staged, = git("diff", "--cached", "--name-only", capture: true)
 unless staged.to_s.strip.empty?
   puts
-  puts "note: the index already has staged changes; they will land in the same commit:"
+  puts "note: git already has staged changes; they will land in the same commit:"
   staged.lines.each { |line| puts "  #{line.strip}" }
 end
 
@@ -100,11 +100,6 @@ tracked, = git("ls-files", "--", feature.rel_dir, capture: true)
 FileUtils.mkdir_p(File.join(Planning::ROOT, "features", target))
 FileUtils.mv(feature.dir, File.join(Planning::ROOT, destination))
 git("add", "-A", "--", *([feature.rel_dir] unless tracked.to_s.strip.empty?), destination)
-
-File.write(Planning::Index.index_path, Planning::Index.render.text)
-puts "regenerated INDEX.md"
-
-git("add", "--", "features", "INDEX.md")
 
 subject = "Move #{slug} to #{target}"
 if do_commit

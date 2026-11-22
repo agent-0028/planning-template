@@ -1,8 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Delete a feature folder, regenerate the index, and stage both as one commit's
-# worth of change.
+# Delete a feature folder and stage the deletion.
 #
 # A folder whose content is already committed can be recovered from history, so
 # it is removed without ceremony. Content in no commit cannot be recovered, so
@@ -113,10 +112,6 @@ unless tracked.to_s.strip.empty?
 end
 FileUtils.rm_rf(feature.dir) if File.exist?(feature.dir)
 puts "removed #{feature.rel_dir}/"
-
-File.write(Planning::Index.index_path, Planning::Index.render.text)
-puts "regenerated INDEX.md"
-git("add", "--", "INDEX.md")
 
 subject = "Delete #{slug}"
 if do_commit

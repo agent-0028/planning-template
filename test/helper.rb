@@ -4,14 +4,13 @@
 #
 # Two levels, because only one thing in the lib touches git:
 #
-#   tmp_tree   a plain directory tree. Everything that reads files — titles,
-#              lookups, table rendering — needs nothing more than this.
-#   tmp_repo   tmp_tree plus `git init`, for the four tests that exercise
-#              Feature#updated, which shells out to `git log` and
-#              `git status`. Nothing else should reach for it.
+#   tmp_tree   a plain directory tree. Everything that reads files — lookups,
+#              headings, the rendered table of contents — needs nothing more.
+#   tmp_repo   tmp_tree plus `git init`, for the tests that exercise
+#              Planning::Dates, which shells out to `git log` and `git status`.
 #
-# In a plain tmp_tree those git calls fail, Feature#updated falls through to
-# Date.today, and that is a perfectly good fixture for anything that does not
+# In a plain tmp_tree those git calls fail and every document reads as
+# "uncommitted", which is a perfectly good fixture for anything that does not
 # care what the date is.
 #
 # Stdlib only, matching the lib itself. Minitest ships with Ruby.
@@ -19,38 +18,12 @@
 require "minitest/autorun"
 require "fileutils"
 require "tmpdir"
-require "date"
 
 require_relative "../bin/lib/planning"
 
 module Fixtures
-  # A README still carrying the old generated-index markers, as a repo that has
-  # not yet been cleaned up would have. Nothing in the lib may touch this file
-  # any more, and one test exists to prove it.
-  README = <<~MARKDOWN
-    # planning
-
-    Intro prose that must survive.
-
-    <!-- BEGIN GENERATED INDEX — edited by bin/index, do not hand-edit -->
-
-    stale content
-
-    <!-- END GENERATED INDEX -->
-
-    Trailing prose that must survive.
-  MARKDOWN
-
-  # The hand-written instructions. Like the README, nothing in the lib may read
-  # or rewrite it; the same test covers both.
-  INSTRUCTIONS = <<~MARKDOWN
-    # Instructions
-
-    Prose that must survive untouched.
-  MARKDOWN
-
-  # A fixed date for committed fixtures, well clear of Date.today so tests can
-  # tell "last commit" and "today" apart without ambiguity.
+  # A fixed date for committed fixtures, so an assertion on a date never
+  # depends on when the suite runs.
   COMMITTED_ON = "2020-01-02"
 
   def tmp_tree
@@ -58,8 +31,6 @@ module Fixtures
       Planning::LIFECYCLES.each do |lifecycle|
         FileUtils.mkdir_p(File.join(root, "features", lifecycle))
       end
-      File.write(File.join(root, "README.md"), README)
-      File.write(File.join(root, "INSTRUCTIONS.md"), INSTRUCTIONS)
       yield root
     end
   end
@@ -93,14 +64,12 @@ module Fixtures
     raise "fixture: git #{args.join(" ")} failed" unless ok
   end
 
-  # Commits everything currently in the tree at a pinned date, so the Updated
-  # column is the same on every machine and every run.
+  # Commits everything currently in the tree at a pinned date, so dates are
+  # the same on every machine and every run.
   def commit_all(root, message: "fixture", date: COMMITTED_ON)
     git(root, "add", "-A")
     git(root, "commit", "-m", message, date: date)
   end
-
-  def today = Date.today.to_s
 end
 
 class PlanningTest < Minitest::Test
