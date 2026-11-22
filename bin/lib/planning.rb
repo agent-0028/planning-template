@@ -299,6 +299,41 @@ module Planning
     end
   end
 
+  # Repo-level checks for bin/check. Each check is a method returning findings;
+  # a finding is a warning or a failure, and only failures change the exit code.
+  # Add a check by writing a method and listing it in CHECKS.
+  module Check
+    Finding = Struct.new(:level, :message) do
+      def failure? = level == :failure
+    end
+
+    CHECKS = %i[documents_without_headings missing_changelog].freeze
+
+    module_function
+
+    def run(root = ROOT)
+      CHECKS.flat_map { |check| send(check, root) }
+    end
+
+    def warning(message) = Finding.new(:warning, message)
+    def failure(message) = Finding.new(:failure, message)
+
+    # Only the work in flight: a finished plan nobody will edit again would
+    # otherwise warn on every run forever.
+    def documents_without_headings(root = ROOT)
+      Feature.all(root)
+        .select { |feature| DEFAULT_SCOPE.include?(feature.lifecycle) }
+        .flat_map(&:documents)
+        .reject(&:heading)
+        .map { |document| warning("#{document.rel_path} has no `# heading`; bin/toc shows a snippet of it instead") }
+    end
+
+    def missing_changelog(root = ROOT)
+      return [] if File.exist?(File.join(root, "CHANGELOG.md"))
+      [warning("CHANGELOG.md is missing; it ships with the template and records what each VERSION brought")]
+    end
+  end
+
   # Renders INDEX.md, which is generated in full. README.md and INSTRUCTIONS.md
   # are written by hand — one by the repo that adopted this template, one by the
   # template itself — and nothing here touches either.

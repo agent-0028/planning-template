@@ -1,8 +1,8 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Verify INDEX.md still matches the feature tree. That is the
-# only thing this repo asserts — nothing inside a feature folder is validated.
+# Run the repo-level checks. Warnings are printed and never fail the run; a
+# check that reports a failure exits 1. Nothing is written.
 
 # This repo pins its Ruby in .ruby-version; the library uses 3.x syntax, so
 # fail with a sentence rather than a parse dump when an older Ruby is in PATH.
@@ -11,14 +11,37 @@ if RUBY_VERSION < "3.0"
         "Run it from the repo root so .ruby-version applies."
 end
 
+require_relative "lib/planning"
+
 if ARGV.include?("--help") || ARGV.include?("-h")
   puts <<~TEXT
     usage: bin/check
 
-    Exits 0 when INDEX.md matches the feature tree, 1 when it is missing or
-    stale. Run it before committing.
+    Runs the repo-level checks and prints what they find. Today every check
+    is a warning, so this always exits 0:
+
+      - a top-level document in an active or proposed feature folder with
+        no `# heading` (bin/toc has to show a snippet of it instead)
+      - CHANGELOG.md missing from the repo root
+
+    Exits 1 only when a check reports a failure.
   TEXT
   exit 0
 end
 
-exec(File.join(__dir__, "index"), "--check")
+abort "bin/check: unknown argument #{ARGV.first.inspect} (try --help)" unless ARGV.empty?
+
+findings = Planning::Check.run
+
+findings.each { |finding| warn "#{finding.failure? ? "error" : "warning"}: #{finding.message}" }
+
+failures = findings.count(&:failure?)
+warnings = findings.length - failures
+
+if findings.empty?
+  puts "bin/check: ok."
+else
+  puts "bin/check: #{failures} error#{"s" unless failures == 1}, #{warnings} warning#{"s" unless warnings == 1}."
+end
+
+exit(failures.zero? ? 0 : 1)
