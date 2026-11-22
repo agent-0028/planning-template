@@ -5,7 +5,8 @@
 # stage both as one commit's worth of change. Nothing inside the folder is read,
 # validated, or edited — the path is the only thing that carries state.
 #
-# Strictly a git mv. A folder git does not track yet belongs to bin/adopt.
+# The folder does not need to be committed first: it is moved on disk and then
+# staged whole, so tracked files show as a rename and untracked ones are added.
 
 # This repo pins its Ruby in .ruby-version; the library uses 3.x syntax, so
 # fail with a sentence rather than a parse dump when an older Ruby is in PATH.
@@ -15,6 +16,7 @@ if RUBY_VERSION < "3.0"
 end
 
 require_relative "lib/planning"
+require "fileutils"
 
 USAGE = <<~TEXT
   usage: bin/move <slug> <lifecycle> [--dry-run] [--commit]
@@ -90,13 +92,14 @@ unless staged.to_s.strip.empty?
   staged.lines.each { |line| puts "  #{line.strip}" }
 end
 
+# A plain move then `add -A` on both paths, rather than `git mv`, so a folder
+# with untracked or uncommitted files moves the same way as a committed one.
+# The old path only goes to `git add` when git knows it: a pathspec matching
+# nothing tracked and nothing on disk is an error.
 tracked, = git("ls-files", "--", feature.rel_dir, capture: true)
-if tracked.to_s.strip.empty?
-  abort "bin/move: #{feature.rel_dir}/ has no tracked files yet. " \
-        "Run bin/adopt #{slug} to bring it under version control first."
-end
-
-git("mv", feature.rel_dir, destination)
+FileUtils.mkdir_p(File.join(Planning::ROOT, "features", target))
+FileUtils.mv(feature.dir, File.join(Planning::ROOT, destination))
+git("add", "-A", "--", *([feature.rel_dir] unless tracked.to_s.strip.empty?), destination)
 
 File.write(Planning::Index.index_path, Planning::Index.render.text)
 puts "regenerated INDEX.md"

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Shared support for bin/toc, bin/adopt, bin/move, bin/index and bin/check.
+# Shared support for bin/toc, bin/move, bin/delete, bin/index and bin/check.
 # Stdlib only. See AGENTS.md for the (very short) contract these assume.
 
 require "date"
